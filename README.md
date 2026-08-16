@@ -50,6 +50,23 @@ python examples/demo_platform.py      # demo 2D plataforma lateral (física real
 python examples/demo_2d.py            # demo 2D tile map
 ```
 
+## Launcher Gráfico
+
+Para quem prefere não usar o terminal, o `launcher.py` abre uma janela
+com botões para iniciar a engine, o editor e as demos:
+
+![Launcher](tests/shots/launcher.png)
+
+```bash
+python launcher.py          # janela com botões (tkinter — já vem com o Python)
+python launcher.py --demo   # lista os comandos disponíveis
+```
+
+Cada botão abre a aplicação em um processo separado: você pode iniciar
+várias demos ao mesmo tempo e a janela do launcher continua disponível.
+No Windows, o `tkinter` já vem instalado com o Python oficial; se faltar,
+o launcher mostra as instruções de instalação para cada sistema.
+
 ## Demonstração Visual
 
 **Menu de entrada (executando `python -m slicengine`):**
