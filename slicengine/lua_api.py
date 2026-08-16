@@ -21,10 +21,7 @@ Permite escrever mods e jogos inteiros em Lua:
 
     engine.start()
 """
-import lupa
-
-
-def _wrap_callable(fn):
+def _wrap_callable(fn, lupa):
     """Converte uma callable Lua recebida pela engine em callable Python."""
     def wrapper(*args, **kwargs):
         try:
@@ -34,7 +31,7 @@ def _wrap_callable(fn):
     return wrapper
 
 
-def build_lua_api(engine) -> "lupa.LuaRuntime":
+def build_lua_api(engine, lupa) -> "lupa.LuaRuntime":
     """Cria um runtime Lua com a tabela `engine` cheia de funções
     vinculadas ao estado interno da engine."""
     rt = lupa.LuaRuntime(unpack_returned_tuples=True)
@@ -66,7 +63,7 @@ def build_lua_api(engine) -> "lupa.LuaRuntime":
 
     # registrar handler via on_event
     def on_event_py(event_id, fn):
-        engine.adicionar_evento_lua(event_id, _wrap_callable(fn))
+        engine.adicionar_evento_lua(event_id, _wrap_callable(fn, lupa))
     lua_api["on_event"] = on_event_py
 
     # start: marca que o script Lua quer iniciar o jogo

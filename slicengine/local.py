@@ -16,7 +16,10 @@ import sys
 import subprocess
 import contextlib
 
-import lupa
+try:
+    import lupa
+except (ModuleNotFoundError, ImportError):
+    lupa = None
 
 from .lua_api import build_lua_api
 from .ptscript import PTScript
@@ -31,8 +34,12 @@ class ScriptRunner:
         self.log_lines: list[str] = []
 
     def _ensure_lua(self):
+        if lupa is None:
+            raise RuntimeError(
+                "o módulo 'lupa' não está instalado. Instale com "
+                "'pip install lupa' para rodar scripts Lua")
         if self._lua_rt is None:
-            self._lua_rt = build_lua_api(self.engine)
+            self._lua_rt = build_lua_api(self.engine, lupa)
         return self._lua_rt
 
     def run_string(self, source: str, lang="auto") -> str:

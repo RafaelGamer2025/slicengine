@@ -50,17 +50,22 @@ def main():
 
     if not args or args[0] == "--menu":
         engine = Engine("SlicEngine", 800, 600, base_dir=base)
-        engine.set_menu(
-            gif=_try_load_gif(base),
-            title="SlicEngine",
-            subtitle="ENTER = demo 3D  |  E = editor  |  "
-                     "D = demo 2D  |  ESC = sair",
-            start_action=lambda: _run_demo(engine, "3d"))
-        # atalhos no menu
-        engine.adicionar_evento("tecla:e", lambda api, p: (
-            setattr(engine, "state", "editor"), engine.state))
-        engine.adicionar_evento("tecla:d", lambda api, p: (
-            _run_demo(engine, "2d"),))
+        if args and args[0] == "--menu":
+            # menu clássico com GIF (compatibilidade)
+            engine.set_menu(
+                gif=_try_load_gif(base),
+                title="SlicEngine",
+                subtitle="ENTER = demo 3D  |  E = editor  |  "
+                         "D = demo 2D  |  ESC = sair",
+                start_action=lambda: _run_demo(engine, "3d"))
+            # atalhos no menu
+            engine.adicionar_evento("tecla:e", lambda api, p: (
+                setattr(engine, "state", "editor"), engine.state))
+            engine.adicionar_evento("tecla:d", lambda api, p: (
+                _run_demo(engine, "2d"),))
+        else:
+            # experiência de entrada completa: menu / jogo / perfil
+            engine.run_entry()
         engine.run()
 
     elif args[0] == "--editor":

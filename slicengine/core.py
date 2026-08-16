@@ -24,6 +24,7 @@ from .hierarchy import Hierarchy
 from .local import ScriptRunner, Shell
 from .profile_db import ProfileDB
 from .aiscript import AIAssistant
+from .menu_screen import MenuScreen
 
 pygame.mixer.pre_init(44100, -16, 2, 1024)
 
@@ -80,6 +81,9 @@ class Engine:
         self._menu_gif = None
         self._menu_title = "SlicEngine"
         self._menu_action = None
+        # telas de entrada (menu / jogo / perfil)
+        self._menu_screen = MenuScreen(self)
+        self._entry_menu = True     # True = entra no MenuScreen, False = set_menu clássico
 
         # perfil
         self.profile_name = profile
@@ -263,7 +267,16 @@ class Engine:
         self._menu_subtitle = subtitle or \
             "Pressione ENTER para jogar"
         self._menu_action = start_action
+        self._entry_menu = False
         self.state = "menu"
+
+    def run_entry(self):
+        """Entra na experiência de entrada completa: Menu Principal com
+        Jogos / Novo Jogo / Perfis / Demos (em vez do menu simples
+        com GIF)."""
+        self._entry_menu = True
+        self._menu_action = None
+        self.state = "menuscreen"
 
     def _draw_menu(self):
         if self._menu_gif is not None:
@@ -421,7 +434,10 @@ class Engine:
                     self.running = False
                 elif ev.type == pygame.KEYDOWN:
                     self.disparar(f"tecla:{pygame.key.name(ev.key)}")
-                    if ev.key == pygame.K_ESCAPE:
+                    if self.state == "menuscreen":
+                        # ESC volta ao menu; demais teclas navegam
+                        self._menu_screen.handle_event(ev)
+                    elif ev.key == pygame.K_ESCAPE:
                         if self.state == "game":
                             self.state = "menu"
                         elif self.state == "menu":
@@ -437,7 +453,13 @@ class Engine:
             keys = pygame.key.get_pressed()
 
             # ------- estados -------
-            if self.state == "menu":
+            if self.state == "menuscreen":
+                if self._menu_action:
+                    self._menu_action()
+                    self._menu_action = None
+                self._menu_screen.update(dt)
+                self._menu_screen.draw()
+            elif self.state == "menu":
                 self._draw_menu()
             elif self.state == "editor":
                 if self.editor is None:

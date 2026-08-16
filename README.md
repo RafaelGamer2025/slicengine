@@ -12,12 +12,12 @@
 | Plataforma 2D | Física real: gravidade, pulo, colisão AABB, câmera lateral, inimigos patrulhando |
 | Editor Visual | Editor de tile maps com pincel, borracha, preenchimento e drag & drop de tiles/entidades, undo/redo |
 | Scripting em Português | Linguagem própria `.sl`: `quando tecla "espaço" for pressionada: ...` |
-| Lua | Mods Lua completos com API da engine (`engine.on_event`, `engine.set_var`...) |
+| Lua (opcional) | Mods Lua completos com API da engine (`engine.on_event`, `engine.set_var`...) — requer `pip install lupa` (o `lupa` não tem wheels para Python 3.14+, nesse caso a engine funciona sem Lua) |
 | C (nativo) | Plugins `.so/.dll/.dylib` carregados via ctypes com interface padrão |
 | Python | Mods Python com função `register(engine)` |
 | Formato `.se` | Pacotes zipados com manifest, mundo, scripts embarcados e assets |
 | Assets | Sprites (PNG/JPG/GIF/BMP), sons (WAV/OGG), músicas (MP3/OGG), GIFs animados |
-| Menu com GIF | Menu inicial com GIF animado de fundo |
+| Menu de Entrada | Fluxo completo de entrada: menu principal, meus jogos, novo jogo, perfis e demos (menu com GIF mantido como compatibilidade) |
 | IA Assistente | IA embutida que ajuda a criar scripts e mapas (modo online ou local com receitas) |
 | Modo Local | Executor de scripts na hora + terminal embutido (pip, etc.) |
 | Perfis em DB | Banco SQLite com perfis, projetos e saves |
@@ -31,7 +31,8 @@
 ```bash
 git clone <url-do-repositorio>
 cd slicengine
-pip install pygame lupa pillow numpy
+pip install pygame pillow numpy
+pip install lupa   # opcional — só necessário para mods Lua (.lua)
 ```
 
 ## Executando
@@ -51,7 +52,23 @@ python examples/demo_2d.py            # demo 2D tile map
 
 ## Demonstração Visual
 
-**Menu com GIF animado:**
+**Menu de entrada (executando `python -m slicengine`):**
+
+![Menu principal](tests/shots/entry_menu_main.png)
+
+O menu de entrada tem quatro telas navegadas por teclas numeradas (1..4) ou clique do mouse: **Jogos/Projetos**, **Novo Jogo**, **Perfis** e **Demos**. Em **Perfis** é possível criar e trocar de perfil — cada perfil é registrado no banco SQLite com seus próprios projetos:
+
+![Perfis](tests/shots/entry_perfis.png)
+
+Em **Novo Jogo** você digita o nome, escolhe o modo (2D raycasting ou 3D) e a engine cria o projeto no banco e abre o editor de mapas:
+
+![Novo Jogo](tests/shots/entry_novo_jogo.png)
+
+Em **Jogos/Projetos** aparecem todos os jogos do perfil ativo, prontos para abrir:
+
+![Meus Jogos](tests/shots/entry_projetos.png)
+
+**Menu clássico com GIF animado (compatibilidade, `python -m slicengine --menu`):**
 
 ![Menu da SlicEngine](tests/shots/menu_real.png)
 
@@ -96,6 +113,7 @@ slicengine/
 │   ├── hierarchy.py   # hierarquia de nós (assets, scripts, comandos, câmeras)
 │   ├── gameobjects.py # GameObject/Component/Transform/Scene/SceneManager/EventBus/Logger
 │   ├── savesystem.py  # SaveSystem: saves, settings, autosave, backup
+│   ├── menu_screen.py # telas de entrada: menu, projetos, novo jogo, perfis, demos
 │   ├── aiscript.py    # IA assistente embutida
 │   ├── local.py       # executor local de scripts e terminal embutido
 │   └── profile_db.py  # perfis e projetos em SQLite
@@ -200,6 +218,8 @@ PYTHONPATH=. python3 tests/test_editor_dd.py     # editor drag & drop
 PYTHONPATH=. python3 tests/test_architecture.py  # ECS, Scene, SaveSystem
 xvfb-run -a python3 tests/test_platform_gui.py   # demo plataforma (GUI)
 xvfb-run -a python3 tests/test_3d_real_gui.py    # 3D real (GUI)
+xvfb-run -a python3 tests/test_entry_gui.py      # fluxo de entrada: menu/perfis/novo jogo (GUI)
+PYTHONPATH=. python3 tests/test_no_lupa.py         # engine funcionando SEM lupa (import opcional)
 ```
 
 ## Licença

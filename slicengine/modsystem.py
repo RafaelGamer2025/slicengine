@@ -15,10 +15,36 @@ import importlib
 import importlib.util
 import ctypes
 import traceback
-import lupa
 
 from .lua_api import build_lua_api, _wrap_callable
 from .ptscript import PTScript
+
+# lupa é opcional: Lua é um recurso extra (mods .lua). A engine
+# funciona normalmente sem ele — só os mods Lua ficam indisponíveis.
+_LUPA = None
+_LUPA_ERR = None
+_LUA_WARNED = False
+try:
+    import lupa
+    _LUPA = lupa
+except ModuleNotFoundError as _e:
+    _LUPA_ERR = str(_e)
+except ImportError as _e:
+    _LUPA_ERR = str(_e)
+
+
+def lua_warning() -> str:
+    """Retorna o aviso sobre Lua ausente (imprime 1 vez) e a string."""
+    global _LUA_WARNED
+    if _LUPA is not None:
+        return ""
+    msg = ("[Mods] 'lupa' não instalado — mods Lua desabilitados. "
+           "Instale com 'pip install lupa' ou ignore (engine funciona "
+           "sem Lua)")
+    if not _LUA_WARNED:
+        print(msg)
+        _LUA_WARNED = True
+    return msg
 
 
 class Plugin:
@@ -36,6 +62,7 @@ class ModSystem:
         self.plugins: list[Plugin] = []
         self._rt = None
         self._c_libs = []
+        lua_warning()
 
     # ------------------------------------------------------------------
     def scan_folder(self, folder: str):
@@ -67,8 +94,15 @@ class ModSystem:
 
     def _load_one(self, p: Plugin):
         if p.kind == "lua":
+            if _LUPA is None:
+                raise RuntimeError(
+                    "o módulo 'lupa' não está instalado (mods Lua "
+                    "requerem Lua embutido). Instale com "
+                    "'pip install lupa' — ou simplesmente remova os "
+                    "arquivos .lua da pasta mods/ para usar a engine "
+                    "sem Lua")
             if self._rt is None:
-                self._rt = build_lua_api(self.engine)
+                self._rt = build_lua_api(self.engine, _LUPA)
             with open(p.path, encoding="utf-8") as f:
                 src = f.read()
             self._rt.execute(src)
@@ -97,3 +131,8 @@ class ModSystem:
         self.plugins.clear()
         self._c_libs.clear()
         self._rt = None
+
+    @property
+    def lua_available(self):
+        """Indica se os mods Lua podem ser carregados."""
+        return _LUPA is not None
