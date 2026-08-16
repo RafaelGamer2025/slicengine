@@ -38,6 +38,7 @@ python -m slicengine --editor         # editor de tile maps com pincel
 python -m slicengine --run jogo.se    # rodar um pacote .se
 python -m slicengine --ai "pergunta"  # perguntar à IA assistente
 python -m slicengine --shell          # shell interativo (pip etc.)
+python examples/demo_fps.py           # demo FPS 3D completa (jogo jogável)
 python examples/demo_3d.py            # demo 3D raycasting
 python examples/demo_2d.py            # demo 2D tile map
 ```
@@ -51,6 +52,16 @@ python examples/demo_2d.py            # demo 2D tile map
 **3D Raycasting estilo Doom:**
 
 ![3D Raycasting](tests/shots/demo_3d.png)
+
+**Demo FPS completa estilo Doom (jogável):**
+
+![Demo FPS](tests/shots/demo_fps.png)
+
+```bash
+python examples/demo_fps.py
+```
+
+Jogo completo com **inimigos interativos** que perseguem e atacam o jogador, **sistema de tiro** (clique ou F: raio na mira, munição, dano por bala, hit markers), **HUD estilo Doom** (vida, munição, eliminados, restantes, arma com recuo e flash) e estados de vitória/morte com reinício (R). Inimigos têm vida, atordoamento ao levar tiro e IA de perseguição que desvia por corredores.
 
 ## Estrutura do Projeto
 

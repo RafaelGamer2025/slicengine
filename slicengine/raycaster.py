@@ -122,11 +122,10 @@ class Raycaster:
         return math.hypot(spr_x - self.x, spr_y - self.y)
 
     def _sprite_screen(self, spr_x, spr_y):
-        """Retorna (x_tela, dist) de um sprite no espaço da câmera."""
+        """Retorna (x_tela, dist) de um sprite no espaço da câmera.
+        A rotação é em torno de -angle para alinhar o dir ao eixo +x."""
         dx = spr_x - self.x
         dy = spr_y - self.y
-        inv_det = 1.0 / (self.dir_y * self.dir_x - (-self.dir_x) * self.dir_y)
-        # transform: plano da câmera é perpendicular ao dir
         cos_a, sin_a = math.cos(-self.angle), math.sin(-self.angle)
         tx = dx * cos_a - dy * sin_a
         ty = dx * sin_a + dy * cos_a

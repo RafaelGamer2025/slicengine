@@ -121,6 +121,103 @@ for k in range(20):
 frames[0].save(os.path.join(OUT, "menu_bg.gif"), save_all=True,
                append_images=frames[1:], duration=120, loop=0)
 
+# ---------------- arma (sprite do FPS) ----------------
+gun = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
+d = ImageDraw.Draw(gun)
+# corpo da pistola
+for y in range(96, 128):
+    for x in range(30, 98):
+        shade = 70 + (y - 96) * 2
+        gun.putpixel((x, y), (shade, shade - 8, shade - 16, 255))
+d.rectangle([26, 92, 102, 102], fill=(55, 50, 45, 255))
+d.rectangle([34, 40, 94, 96], fill=(85, 80, 75, 255))
+d.rectangle([40, 30, 88, 44], fill=(110, 105, 100, 255))
+d.rectangle([48, 18, 80, 32], fill=(140, 135, 130, 255))
+d.ellipse([44, 12, 84, 28], fill=(170, 165, 160, 255))  # cano
+gun.save(os.path.join(OUT, "gun.png"))
+
+# ---------------- inimigo do FPS (maior, sprite 64x64) ----------------
+fps_enemy = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+d = ImageDraw.Draw(fps_enemy)
+d.ellipse([6, 6, 58, 58], fill=(160, 40, 40, 255))
+d.ellipse([14, 14, 28, 28], fill=(255, 240, 60, 255))   # olho esq
+d.ellipse([36, 14, 50, 28], fill=(255, 240, 60, 255))   # olho dir
+d.ellipse([17, 17, 25, 25], fill=(20, 0, 0, 255))
+d.ellipse([39, 17, 47, 25], fill=(20, 0, 0, 255))
+# boca
+d.polygon([(20, 42), (44, 42), (40, 52), (24, 52)], fill=(10, 0, 0, 255))
+fps_enemy.save(os.path.join(OUT, "enemy_fps.png"))
+
+# ---------------- sons procedurais ----------------
+try:
+    import wave
+    import struct
+
+    SOUNDS = os.path.join(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))), "sounds")
+    os.makedirs(SOUNDS, exist_ok=True)
+
+    SR = 22050  # sample rate
+
+    def write_wav(path, samples):
+        with wave.open(path, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SR)
+            wf.writeframes(b"".join(
+                struct.pack("<h", int(max(-32768, min(32767, s))))
+                for s in samples))
+
+    def env(i, n, a=0.005, r=0.25):
+        """Envelope ADSR simples."""
+        if i < a * SR:
+            return i / (a * SR)
+        return max(0.0, 1 - (i - a * SR) / (r * SR))
+
+    # tiro.wav — click + ruído curto
+    n = int(0.18 * SR)
+    random.seed(111)
+    samples = [(-1 + 2 * random.random()) * env(i, n, r=0.06) * 9000
+               + math.sin(2 * math.pi * 120 * i / SR) * env(i, n, r=0.12)
+               * 4000 for i in range(n)]
+    write_wav(os.path.join(SOUNDS, "tiro.wav"), samples)
+
+    # dano.wav — tom grave descendente
+    n = int(0.3 * SR)
+    samples = [math.sin(2 * math.pi * (300 - 180 * i / n) * i / SR)
+               * env(i, n, r=0.2) * 7000 for i in range(n)]
+    write_wav(os.path.join(SOUNDS, "dano.wav"), samples)
+
+    # moeda.wav — bip agudo
+    n = int(0.25 * SR)
+    samples = [math.sin(2 * math.pi * 880 * i / SR) * env(i, n, r=0.15)
+               * 5000 + math.sin(2 * math.pi * 1320 * i / SR)
+               * env(i, n, r=0.15) * 2500 for i in range(n)]
+    write_wav(os.path.join(SOUNDS, "moeda.wav"), samples)
+
+    # pulo.wav — whoosh
+    n = int(0.2 * SR)
+    random.seed(222)
+    samples = [math.sin(2 * math.pi * (200 + 300 * i / n) * i / SR)
+               * env(i, n, r=0.12) * 4500 for i in range(n)]
+    write_wav(os.path.join(SOUNDS, "pulo.wav"), samples)
+
+    # inicio.wav — acorde curto
+    n = int(0.5 * SR)
+    samples = [sum(math.sin(2 * math.pi * f * i / SR)
+                   for f in (262, 330, 392)) * env(i, n, r=0.35)
+               * 2200 for i in range(n)]
+    write_wav(os.path.join(SOUNDS, "inicio.wav"), samples)
+
+    print("sons gerados em", SOUNDS)
+except Exception as e:
+    print("aviso: sons não gerados:", e)
+
 print("assets gerados em", OUT)
 for f in sorted(os.listdir(OUT)):
     print(" -", f)
+try:
+    for f in sorted(os.listdir(SOUNDS)):
+        print(" -", f)
+except Exception:
+    pass
