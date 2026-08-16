@@ -122,14 +122,21 @@ class Raycaster:
         return math.hypot(spr_x - self.x, spr_y - self.y)
 
     def _sprite_screen(self, spr_x, spr_y):
-        """Retorna (x_tela, dist) de um sprite no espaço da câmera."""
+        """Retorna (x_tela, dist) de um sprite no espaço da câmera.
+
+        Usa o plano da câmera (perpendicular à direção) para projetar
+        o sprite, mesmo método do tutorial clássico de raycasting."""
         dx = spr_x - self.x
         dy = spr_y - self.y
-        inv_det = 1.0 / (self.dir_y * self.dir_x - (-self.dir_x) * self.dir_y)
-        # transform: plano da câmera é perpendicular ao dir
-        cos_a, sin_a = math.cos(-self.angle), math.sin(-self.angle)
-        tx = dx * cos_a - dy * sin_a
-        ty = dx * sin_a + dy * cos_a
+        # plano = direção rotacionada 90° (vetor do camera plane)
+        plane_x, plane_y = -self.dir_y, self.dir_x
+        # transform matrix inversa: [[dir_x, dir_y],[plane_x, plane_y]]
+        det = plane_x * self.dir_y - self.dir_x * plane_y
+        if abs(det) < 1e-9:
+            return None, 0.0
+        inv_det = 1.0 / det
+        tx = inv_det * (plane_y * dx - plane_x * dy)
+        ty = inv_det * (-self.dir_y * dx + self.dir_x * dy)
         if ty <= 0.1:
             return None, 0.0
         screen_x = int((self.width / 2) * (1 + tx / (ty * math.tan(self.half_fov))))
@@ -221,10 +228,20 @@ class Raycaster:
     # Controles do jogador
     # ------------------------------------------------------------------
     def move(self, keys, dt):
-        """Movimento WASD + rotação Q/E (ou setas)."""
+        """Movimento WASD + rotação Q/E (ou setas).
+        Compatível com pygame.key.ScancodeWrapper (2.6) e dicts antigos."""
         cs = math.cos(self.angle)
         sn = math.sin(self.angle)
         mx = my = 0.0
+        # pygame 2.6: keys pode ser ScancodeWrapper (sem .get());
+        # o core já passa o resultado de key.get_pressed(), então
+        # converte para dict compatível se necessário
+        if not hasattr(keys, "get"):
+            keys = {k: keys[k] for k in
+                    (pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d,
+                     pygame.K_q, pygame.K_e,
+                     pygame.K_UP, pygame.K_DOWN,
+                     pygame.K_LEFT, pygame.K_RIGHT)}
         if keys.get(pygame.K_w, False) or keys.get(pygame.K_UP, False):
             mx += cs; my += sn
         if keys.get(pygame.K_s, False) or keys.get(pygame.K_DOWN, False):

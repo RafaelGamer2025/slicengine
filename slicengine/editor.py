@@ -25,6 +25,7 @@ TILE_COLORS = {
 }
 
 TOOL_BRUSH, TOOL_ERASER, TOOL_FILL = "brush", "eraser", "fill"
+TOOL_ENTITY = "entity"
 
 
 class TilePalette:
@@ -79,9 +80,18 @@ class MapEditor:
         self.tool_size = 1          # tamanho do pincel (1, 2, 3...)
         self.paused_ticks = 0
         self.status_msg = "Editor SlicEngine — B=pincel, E=borracha, "+ \
-                          "+/-=tamanho, L=camada, Ctrl+S=salvar, T=testar"
+                          "F=balde, N=entidade, Ctrl+Z/Y, Ctrl+S=salvar, " \
+                          "T=testar"
         self.status_timer = 0.0
         self.palette = TilePalette(self.tile_size)
+
+        # undo/redo: pilha de snapshots do tilemap
+        self._undo_stack = []
+        self._redo_stack = []
+        self._undo_max = 40
+        # modo entidade (P player, E inimigo, C moeda)
+        self.entity_kind = None
+        self.ENTITIES = [("P", "player"), ("E", "enemy"), ("C", "coin")]
 
         # carregar sprites da paleta, se existirem
         self.tile_sprites = {}
@@ -100,10 +110,69 @@ class MapEditor:
         sy = (my + self.camera.y) // self.tile_size
         return int(sx), int(sy)
 
+    # ------------------------------------------------------------------
+    # Undo/Redo
+    # ------------------------------------------------------------------
+    def _snapshot(self):
+        import copy
+        data = {"layers": [copy.deepcopy(l["tiles"]) for l in
+                           self.tilemap.layers],
+                "active": self.tilemap.active_layer,
+                "ents": [(e.kind, e.x, e.y) for e in
+                         self.engine.world.entities]}
+        self._undo_stack.append(data)
+        if len(self._undo_stack) > self._undo_max:
+            self._undo_stack.pop(0)
+        self._redo_stack.clear()
+
+    def undo(self):
+        import copy
+        if not self._undo_stack:
+            return
+        import copy as _copy
+        self._redo_stack.append(
+            {"layers": [_copy.deepcopy(l["tiles"]) for l in
+                        self.tilemap.layers],
+             "ents": [(e.kind, e.x, e.y) for e in
+                      self.engine.world.entities]})
+        data = self._undo_stack.pop()
+        for l, tiles in zip(self.tilemap.layers, data["layers"]):
+            l["tiles"] = tiles
+        self.tilemap.active_layer = data["active"]
+        self.status("Desfazer OK")
+
+    def redo(self):
+        import copy as _copy
+        if not self._redo_stack:
+            return
+        self._undo_stack.append(
+            {"layers": [_copy.deepcopy(l["tiles"]) for l in
+                        self.tilemap.layers],
+             "ents": [(e.kind, e.x, e.y) for e in
+                      self.engine.world.entities]})
+        data = self._redo_stack.pop()
+        for l, tiles in zip(self.tilemap.layers, data["layers"]):
+            l["tiles"] = tiles
+        # restaurar entidades salvas
+        from .world import Entity
+        self.engine.world.entities = [Entity(k, x, y) for k, x, y in
+                                      data["ents"]]
+        self.status("Refazer OK")
+
+    # ------------------------------------------------------------------
     def _paint(self, x, y, key=None):
         """Pinta célula (pincel, borracha ou preenchimento)."""
         if key is not None and key != (x, y):
             return  # célula já pintada (evita redundância)
+        if self.tool == TOOL_ENTITY and self.entity_kind:
+            # substituir entidade do tipo selecionado na célula
+            for e in self.engine.world.entities:
+                if int(e.x) == x and int(e.y) == y:
+                    e.alive = False
+            if self.entity_kind:
+                self.engine.world.entities.append(
+                    Entity(self.entity_kind, x + 0.5, y + 0.5))
+            return
         if self.tool == TOOL_FILL:
             old = self.tilemap.get(x, y)
             new = 0 if old else self.palette.selected
@@ -132,6 +201,14 @@ class MapEditor:
                     stack.append((nx, ny))
 
     # ------------------------------------------------------------------
+    def _begin_stroke(self):
+        """Marcar snapshot antes de pintar (chamado no primeiro clique
+        de um traço)."""
+        if self._undo_stack and self._undo_stack[-1] is self._stroke_snap:
+            return
+        self._snapshot()
+        self._stroke_snap = self._undo_stack[-1]
+
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_b:
@@ -157,8 +234,29 @@ class MapEditor:
                 self.save_current("mapa.se")
             elif event.key == pygame.K_t:
                 return "test"   # sinal para engine entrar em modo jogo
+            elif event.key == pygame.K_z and (pygame.key.get_mods()
+                                              & pygame.KMOD_CTRL):
+                self.undo()
+            elif event.key == pygame.K_y and (pygame.key.get_mods()
+                                              & pygame.KMOD_CTRL):
+                self.redo()
+            elif event.key == pygame.K_n:
+                # alternar modo entidade: sem entidade -> player
+                if self.entity_kind is None:
+                    self.entity_kind = "player"
+                    self.status("Modo entidade: player (P)")
+                elif self.entity_kind == "player":
+                    self.entity_kind = "enemy"
+                    self.status("Modo entidade: inimigo (E)")
+                elif self.entity_kind == "enemy":
+                    self.entity_kind = "coin"
+                    self.status("Modo entidade: moeda (C)")
+                else:
+                    self.entity_kind = None
+                    self.tool = TOOL_BRUSH
+                    self.status("Voltou para o pincel")
             elif event.key in (pygame.K_r,):
-                self.status("Desfazer: use Ctrl+Z no futuro (em breve)")
+                self.status("Ctrl+Z desfaz, Ctrl+Y refaz")
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 # clique na paleta?
@@ -171,12 +269,16 @@ class MapEditor:
                     return
                 self.brushing = True
                 self.last_brush = None
+                self._stroke_snap = None
+                self._begin_stroke()
                 self._brush(event.pos[0], event.pos[1])
             elif event.button == 3:
                 # botão direito = borracha
                 self.brushing = True
                 self.tool = TOOL_ERASER
                 self.last_brush = None
+                self._stroke_snap = None
+                self._begin_stroke()
                 self._brush(event.pos[0], event.pos[1])
         elif event.type == pygame.MOUSEBUTTONUP:
             if event.button in (1, 3):
@@ -237,13 +339,22 @@ class MapEditor:
         # HUD
         font = pygame.font.SysFont("dejavusans", 14, bold=True)
         tool_name = {"brush": "Pincel", "eraser": "Borracha",
-                     "fill": "Balde"}[self.tool]
+                     "fill": "Balde",
+                     "entity": f"Entidade ({self.entity_kind})"}.get(
+            self.tool, self.tool)
         hud = (f"Editor | {tool_name} (tam {self.tool_size}) | camada "
                f"{self.tilemap.active_layer} | {self.tilemap.width}x"
-               f"{self.tilemap.height} | Ctrl+S salvar | T testar")
+               f"{self.tilemap.height} | Ctrl+Z/Y | Ctrl+S salvar | "
+               f"T testar")
         t = font.render(hud, True, (230, 230, 230))
         surface.blit(t, (10, 8))
         self.palette.draw(surface, 10, 40)
+        # indicador do modo entidade
+        if self.entity_kind:
+            col = {"player": (60, 150, 255), "enemy": (220, 60, 60),
+                   "coin": (255, 215, 0)}[self.entity_kind]
+            pygame.draw.circle(surface, col, (120, 30), 12)
+            pygame.draw.circle(surface, (255, 255, 255), (120, 30), 12, 1)
         if self.status_timer > 0:
             st = font.render(self.status_msg, True, (255, 240, 150))
             surface.blit(st, (10, surface.get_height() - 24))

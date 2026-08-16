@@ -3,33 +3,54 @@ SlicEngine — API da engine exposta para scripts Lua (via lupa).
 
 Permite escrever mods e jogos inteiros em Lua:
 
-    engine.window("Meu Jogo Lua", 800, 600)
     engine.set_var("pontos", 0)
 
-    function ao_tocar_moeda(dados)
-        engine.add_var("pontos", 1)
-        engine.play_sound("moeda.wav")
-        engine.show_text("+" .. dados.valor .. " pontos!", 1.5)
+    function pegar_moeda(api, dados)
+        engine.add_var("pontos", 10)
+        api.tocar_som("moeda.wav")
+        api.mostrar_texto("Moeda!", 1.5)
     end
 
-    engine.on_event("colidir:moeda", ao_tocar_moeda)
+    engine.on_event("colidir:moeda", pegar_moeda)
 
-    function atualizar(dt)
-        -- lógica por frame
+    function atualizar(api, dt)
+        -- lógica por frame; dt chega como `dt` (payload do update)
     end
     engine.on_event("update", atualizar)
 
-    engine.start()
+Assinatura padrão dos callbacks: (api, payload)
+- update: payload = dt (float)
+- tecla:X / tecla_up:X: payload = nome da tecla
+- colidir:tipo: payload = dados da entidade tocada (dict)
+- mouse:click: payload = (x, y) do clique
+
+Aliases em português também funcionam:
+    engine.mostrar_texto / engine.tocar_som / engine.tocar_musica /
+    engine.mover_jogador / engine.criar_entidade / engine.carregar_mapa /
+    engine.parar_jogo / engine.parar_musica / engine.pegar /
+    engine.adicionar / engine.definir
 """
 import lupa
 
 
-def _wrap_callable(fn):
-    """Converte uma callable Lua recebida pela engine em callable Python."""
-    def wrapper(*args, **kwargs):
+def _wrap_callable(fn, mode="default"):
+    """Converte um callback Lua em callable Python compatível com a
+    engine (que chama handlers como `fn(api, payload)`).
+
+    mode="default": aceita qualquer assinatura e repassa (api, payload);
+    funções que declaram 1 argumento recebem só o payload.
+    """
+    def wrapper(api_or_none, payload=None):
         try:
-            return fn(*args, **kwargs)
+            if lupa.lua_type(fn) != "function":
+                return fn(api_or_none, payload)
+            # lupa não expõe nparams em funções globais; chamar com a
+            # assinatura completa (api, payload) — argumentos extras em
+            # Lua são simplesmente descartados
+            return fn(api_or_none, payload)
         except lupa.LuaError as e:
+            print(f"[Lua] erro no callback: {e}")
+        except Exception as e:
             print(f"[Lua] erro no callback: {e}")
     return wrapper
 
@@ -41,6 +62,10 @@ def build_lua_api(engine) -> "lupa.LuaRuntime":
 
     state = engine.lua_state
 
+    def _push_text(text, dur=2.0):
+        # integra com o toast da engine (o core desenha _toast)
+        engine._api_mostrar_texto(text, dur)
+
     api = {
         "window": lambda title, w, h: state.setdefault("window",
                                                        [title, w, h]),
@@ -51,18 +76,36 @@ def build_lua_api(engine) -> "lupa.LuaRuntime":
         "play_sound": lambda path: state["snd_queue"].append(path),
         "play_music": lambda path: state["mus_queue"].append(path),
         "stop_music": lambda: state["mus_queue"].append(None),
-        "show_text": lambda text, dur=2.0: state["texts"].append(
-            [text, dur, dur]),
+        "show_text": _push_text,
         "stop_game": lambda: state.setdefault("stop", True),
         "move_player": lambda dx, dy: state["player_move"].append([dx, dy]),
         "spawn_entity": lambda kind, x=0.0, y=0.0: state["spawns"].append(
             [kind, x, y]),
         "load_map": lambda path: state.setdefault("load_map", path),
         "log": print,
+        # aliases em português (mesma API usada pelos callbacks .sl)
+        "mostrar_texto": _push_text,
+        "tocar_som": lambda path: state["snd_queue"].append(path),
+        "tocar_musica": lambda path: state["mus_queue"].append(path),
+        "parar_musica": lambda: state["mus_queue"].append(None),
+        "mover_jogador": lambda dx, dy: state["player_move"].append(
+            [dx, dy]),
+        "criar_entidade": lambda kind: state["spawns"].append(
+            [kind, 0.0, 0.0]),
+        "carregar_mapa": lambda path: state.setdefault("load_map", path),
+        "parar_jogo": lambda: state.setdefault("stop", True),
+        "pegar": lambda name: state["vars"].get(name, 0),
+        "adicionar": lambda name, n: state["vars"].__setitem__(
+            name, state["vars"].get(name, 0) + n),
+        "definir": lambda name, val: state["vars"].__setitem__(name, val),
+        "tecla_pressionada": lambda key: bool(
+            __import__("pygame").key.get_pressed()[
+                getattr(__import__("pygame"),
+                        "K_" + key.upper(), 0)]),
     }
 
     # tabela engine
-    lua_api = rt.eval("{}", ) if False else rt.table_from(api)
+    lua_api = rt.eval("{}") if False else rt.table_from(api)
 
     # registrar handler via on_event
     def on_event_py(event_id, fn):

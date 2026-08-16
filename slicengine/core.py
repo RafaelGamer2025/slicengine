@@ -11,6 +11,7 @@ A classe Engine une tudo:
 import os
 import sys
 import time
+import math
 import pygame
 
 from . import utils
@@ -21,6 +22,8 @@ from .editor import MapEditor
 from .modsystem import ModSystem
 from .seformat import SEFormat
 from .hierarchy import Hierarchy
+from .effects import ParticleSystem
+from .saves import SaveManager
 from .local import ScriptRunner, Shell
 from .profile_db import ProfileDB
 from .aiscript import AIAssistant
@@ -76,9 +79,16 @@ class Engine:
         # texto flutuante: (texto, fim_tempo)
         self._toast = None
 
-        # menu
+        # novos módulos da v0.2
+        self.fx = ParticleSystem()          # sistema de partículas
+        self.saves = SaveManager(self)      # saves persistentes
+        self.minimap = True                 # mostrar minimapa no 3D?
+        self.debug_console = False          # console F1
+
+        # menu (defaults garantidos antes de set_menu)
         self._menu_gif = None
         self._menu_title = "SlicEngine"
+        self._menu_subtitle = "Pressione ENTER para jogar"
         self._menu_action = None
 
         # perfil
@@ -88,6 +98,10 @@ class Engine:
         # carregar mods da pasta plugins/ e do base_dir
         self.mods.scan_folder(os.path.join(self.base_dir, "plugins"))
         self.mods.scan_folder(os.path.join(self.base_dir, "mods"))
+
+        # atalhos de debug padrão
+        self.adicionar_evento("tecla:f1", self._toggle_debug_console)
+        self.adicionar_evento("tecla:f2", lambda api, p: self._screenshot())
 
     # ------------------------------------------------------------------
     # API pública de eventos (usada por Lua/Python/.sl)
@@ -164,6 +178,8 @@ class Engine:
         """Cria mundo a partir de mapa ASCII (# parede, P player, E inimigo)."""
         self.world = World.from_ascii(ascii_map)
         self.world.flags["title"] = title
+        # mapa com paredes '#' roda em modo raycast (3D); sem paredes,
+        # roda como tile map 2D
         self.mode = "3d" if any("#" in ln for ln in ascii_map.splitlines()) \
             else "2d"
         self._setup_scene()
@@ -421,7 +437,9 @@ class Engine:
                     self.running = False
                 elif ev.type == pygame.KEYDOWN:
                     self.disparar(f"tecla:{pygame.key.name(ev.key)}")
-                    if ev.key == pygame.K_ESCAPE:
+                    if ev.key == pygame.K_m and self.state == "game":
+                        self.minimap = not self.minimap
+                    elif ev.key == pygame.K_ESCAPE:
                         if self.state == "game":
                             self.state = "menu"
                         elif self.state == "menu":
@@ -460,9 +478,28 @@ class Engine:
                         for e in self.world.entities if e.alive]
                     self.raycaster.render(self.screen, sprites)
                     self._update_2d_entities(keys, dt)
+                    # partículas no 3D (coordenadas de tile no mundo)
+                    self.fx.update(dt)
+                    ts3 = self.world.tilemap.tile_size
+                    self.fx.draw(self.screen,
+                                 camera=(self.raycaster.x -
+                                         self.width / ts3 / 2,
+                                         self.raycaster.y -
+                                         self.height / ts3 / 2),
+                                 tile_size=ts3, center_xy=True)
+                    # minimapa
+                    if self.minimap:
+                        self._draw_minimap()
                 else:
                     self._update_2d_entities(keys, dt)
                     self._draw_2d()
+                    # partículas no modo 2D (coordenadas de tile)
+                    self.fx.update(dt)
+                    _ts = self.world.tilemap.tile_size
+                    cam = self._cam_2d()
+                    self.fx.draw(self.screen, camera=(cam[0] / _ts,
+                                                      cam[1] / _ts),
+                                 tile_size=_ts, center_xy=True)
                 # handlers de update (hierarquia + handlers)
                 self.hierarchy.run_scripts(dt, self)
                 self.disparar("update", dt)
@@ -496,6 +533,9 @@ class Engine:
                                     (255, 255, 255))
                     self.screen.blit(
                         t, (self.width // 2 - t.get_width() // 2, 40))
+                # console de debug (F1)
+                if self.debug_console:
+                    self._draw_debug_console()
                 # FPS
                 fps = pygame.font.SysFont("dejavusans", 13)
                 f = fps.render(f"FPS {self.fps_counter.fps:.0f} | "
@@ -547,3 +587,93 @@ class Engine:
 
     def print_hierarchy(self) -> str:
         return repr(self.hierarchy)
+
+    # ------------------------------------------------------------------
+    # Novos recursos v0.2
+    # ------------------------------------------------------------------
+    def _cam_2d(self):
+        """Posição da câmera 2D em pixels (para partículas/efeitos)."""
+        px, py = self._player_xy()
+        ts = self.world.tilemap.tile_size
+        tm = self.world.tilemap
+        cam_x = max(0, min(px * ts - self.width // 2,
+                           tm.pixels_w - self.width))
+        cam_y = max(0, min(py * ts - self.height // 2,
+                           tm.pixels_h - self.height))
+        return (cam_x, cam_y)
+
+    def _draw_minimap(self):
+        """Minimapa no canto superior esquerdo (modo 3D)."""
+        grid = self.world.raycast_map
+        if not grid:
+            return
+        cell = 5
+        w = len(grid[0]) * cell
+        h = len(grid) * cell
+        overlay = pygame.Surface((w + 6, h + 6), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 120))
+        for y, row in enumerate(grid):
+            for x, v in enumerate(row):
+                col = (60, 60, 70) if v else (25, 25, 30)
+                overlay.fill(col, (3 + x * cell, 3 + y * cell,
+                                   cell - 1, cell - 1))
+        rc = self.raycaster
+        px = int(3 + rc.x * cell)
+        py = int(3 + rc.y * cell)
+        pygame.draw.circle(overlay, (255, 220, 60), (px, py), 3)
+        # direção
+        ex = int(px + math.cos(rc.angle) * 6)
+        ey = int(py + math.sin(rc.angle) * 6)
+        pygame.draw.line(overlay, (255, 60, 60), (px, py), (ex, ey), 2)
+        self.screen.blit(overlay, (6, 6))
+
+    def _draw_debug_console(self):
+        """Console de debug: variáveis de jogo + entidades vivas."""
+        font = pygame.font.SysFont("dejavusansmono", 13)
+        lines = ["== Console de Debug (F1 para fechar) ==",
+                 f"modo {self.mode} | estado {self.state} | "
+                 f"FPS {self.fps_counter.fps:.0f}"]
+        vars_ = self.lua_state["vars"]
+        for k, v in list(vars_.items())[:12]:
+            lines.append(f"  {k} = {v!r}")
+        alive = sum(1 for e in self.world.entities if e.alive)
+        lines.append(f"entidades vivas: {alive}")
+        lines.append(f"partículas ativas: {self.fx.alive_count()}")
+        y = 60
+        for ln in lines:
+            t = font.render(ln, True, (0, 255, 0), (0, 0, 0))
+            self.screen.blit(t, (10, y))
+            y += 17
+
+    def _toggle_debug_console(self, api=None, payload=None):
+        self.debug_console = not self.debug_console
+
+    def _screenshot(self, path=None):
+        """Salva um screenshot da tela atual."""
+        import os as _os
+        import datetime as _dt
+        p = path or _os.path.join(
+            self.base_dir,
+            "screenshot_" + _dt.datetime.now().strftime("%Y%m%d_%H%M%S") +
+            ".png")
+        pygame.image.save(self.screen, p)
+        self._api_mostrar_texto(f"Screenshot salvo: {p}", 2)
+        return p
+
+    # ------------------------------------------------------------------
+    # API de efeitos e saves (acessível por scripts)
+    # ------------------------------------------------------------------
+    def emitir_particulas(self, x, y, **kw):
+        """Atalho: emitir partículas em coordenadas de tile do mundo."""
+        self.fx.emit(x=x, y=y, center_xy=False, **kw)
+
+    def save_game(self, slot, titulo=None):
+        return self.saves.save(slot, titulo)
+
+    def load_game(self, slot):
+        if self.saves.load(slot):
+            self.state = "game"
+            self._api_mostrar_texto(f"Jogo carregado: {slot}", 2)
+            return True
+        return False
+

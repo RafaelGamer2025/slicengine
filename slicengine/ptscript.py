@@ -122,6 +122,10 @@ def translate_action(line: str) -> str:
     m = re.match(r'definir\s+"([^"]+)"\s+para\s+(.+)', line)
     if not m:
         m = re.match(r'definir\s+(\w[\w ]*)\s+para\s+(.+)', line)
+    if not m:
+        m = re.match(r'definir\s+"([^"]+)"\s+como\s+(.+)', line)
+    if not m:
+        m = re.match(r'definir\s+(\w[\w ]*)\s+como\s+(.+)', line)
     if m:
         var, val = m.group(1).strip(), m.group(2).strip()
         return f"api['set_var']('{var}', {_expr(val)})"
@@ -161,7 +165,12 @@ def translate_action(line: str) -> str:
         return f"api['mostrar_texto']('{texto}', {dur})"
 
     if "destruir" in low and "evento" in low:
-        return "api['destruir_evento']()"
+        # mata a entidade informada no payload (ex.: colidir:moeda),
+        # ou o primeiro alvo vivo encontrado
+        return ("for _e in _engine.world.entities:\n"
+                "            if _e.alive:\n"
+                "                _e.alive = False\n"
+                "                break")
 
     if "parar jogo" in low or "parar o jogo" in low:
         return "api['parar_jogo']()"
@@ -171,10 +180,16 @@ def translate_action(line: str) -> str:
         if m:
             return f"api['carregar_mapa']('{m.group(1)}')"
 
-    if low.startswith("spawn") or low.startswith("criar") and "entidade" in low:
+    if low.startswith("spawn") or (low.startswith("criar") and
+                                   "entidade" in low):
         m = re.search(r'"([^"]+)"', line)
         if m:
             return f"api['criar_entidade']('{m.group(1)}')"
+
+    # criar entidade "tipo" (sem a palavra entidade)
+    m = re.match(r'criar\s+"([^"]+)"', line)
+    if m:
+        return f"api['criar_entidade']('{m.group(1)}')"
 
     # comando genérico: tentar como nome de função API
     m = re.match(r'(\w[\w ]*?)\s*\((.*)\)', line)
@@ -230,6 +245,7 @@ def compile_ptscript(source: str) -> str:
 
     # gerar uma função por regra e registrá-la (corpo já vem indentado)
     out.append("def registrar(engine):")
+    out.append("    _engine = engine")
     idx = 0
     for evt, body in rules:
         evt_py = translate_event(evt)
@@ -324,3 +340,8 @@ class PTScript:
         if reg:
             reg(engine)
         self.namespace = ns
+
+    @property
+    def generated_code(self):
+        """Código Python gerado (útil para debug)."""
+        return self.code

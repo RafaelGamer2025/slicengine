@@ -8,6 +8,7 @@ Importa e armazena em cache:
 - GIFs animados (sequência de frames para menus)
 """
 import os
+import colorsys
 import pygame
 from PIL import Image
 
@@ -41,7 +42,23 @@ class AssetManager:
     def sprite(self, path: str, colorkey=None) -> pygame.Surface:
         if path in self.sprites:
             return self.sprites[path]
-        surf = pygame.image.load(self._abs(path)).convert_alpha()
+        abs_path = self._abs(path)
+        if not os.path.exists(abs_path):
+            # fallback: procurar na pasta assets/ e, se não houver,
+            # gerar um placeholder colorido
+            alt = os.path.join(self.base_dir, "assets", path)
+            if os.path.exists(alt):
+                abs_path = alt
+            else:
+                print(f"[Engine] sprite não encontrado: {abs_path}")
+                surf = pygame.Surface((32, 32), pygame.SRCALPHA)
+                h = abs(hash(path)) % 360
+                r, g, b = tuple(int(c * 255) for c in
+                                colorsys.hsv_to_rgb(h / 360, 0.7, 0.8))
+                surf.fill((r, g, b, 255))
+                self.sprites[path] = surf
+                return surf
+        surf = pygame.image.load(abs_path).convert_alpha()
         if colorkey is not None:
             surf.set_colorkey(colorkey)
         self.sprites[path] = surf

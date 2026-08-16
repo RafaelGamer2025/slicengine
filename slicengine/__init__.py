@@ -30,6 +30,9 @@ from .local import ScriptRunner, Shell
 from .profile_db import ProfileDB
 from .aiscript import AIAssistant
 from .ptscript import PTScript
+from .effects import ParticleSystem
+from .saves import SaveManager
+from .spritesheet import Animation, AnimatedSprite, SpriteAtlas
 from . import utils
 
 VERSION = utils.VERSION
@@ -39,5 +42,7 @@ __all__ = [
     "Engine", "World", "TileMap", "Entity", "Raycaster", "MapEditor",
     "ModSystem", "SEFormat", "AssetManager", "Hierarchy",
     "HierarchyNode", "ScriptRunner", "Shell", "ProfileDB",
-    "AIAssistant", "PTScript", "VERSION", "ENGINE_NAME",
+    "AIAssistant", "PTScript", "ParticleSystem", "SaveManager",
+    "Animation", "AnimatedSprite", "SpriteAtlas", "VERSION",
+    "ENGINE_NAME",
 ]

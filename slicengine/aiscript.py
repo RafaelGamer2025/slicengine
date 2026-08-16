@@ -130,35 +130,35 @@ quando colidir com "moeda":
 engine.set_var("vy", 0)
 engine.set_var("no_chao", true)
 
-function update(dt)
+function pulo(api, dt)
     local vy = engine.get_var("vy")
-    if engine.tecla_pressionada("space") and engine.get_var("no_chao") then
-        engine.set_var("vy", -9)
-        engine.set_var("no_chao", false)
-        engine.play_sound("pulo.wav")
-    end
     vy = vy + 20 * dt          -- gravidade
     engine.set_var("vy", vy)
     engine.move_player(0, vy * dt)
 end
-engine.on_event("update", update)""")
+engine.on_event("update", pulo)
+
+function pular(api, nada)
+    if engine.get_var("no_chao") then
+        engine.set_var("vy", -9)
+        engine.set_var("no_chao", false)
+        engine.play_sound("pulo.wav")
+    end
+end
+engine.on_event("tecla:space", pular)""")
 
     def _recipe_inimigo(self):
         return self._code("Inimigo que persegue o jogador", """
-function update(dt)
+function perseguir(api, dt)
     local px = engine.get_var("player_x")
     local py = engine.get_var("player_y")
-    local ex = engine.get_var("enemy_x")
-    local ey = engine.get_var("enemy_y")
-    local dx, dy = px - ex, py - ey
-    local dist = math.sqrt(dx*dx + dy*dy)
-    if dist > 0.01 then
-        engine.move_player((dx/dist) * 2 * dt, (dy/dist) * 2 * dt)
-    end
+    -- mover o jogador na direção do inimigo (efeito de dano)
+    local vx = (px > 5 and 2 or -2) * dt
+    engine.move_player(vx, 0)
 end
-engine.on_event("update", update)
+engine.on_event("update", perseguir)
 
-function ao_tocar(dados)
+function ao_tocar(api, dados)
     engine.show_text("Aii! Dano!", 1)
     engine.play_sound("dano.wav")
 end
@@ -207,7 +207,7 @@ engine.on_event("tecla:space", apertar)""")
             "e = Engine()\n"
             "menu_gif = e.assets.gif('assets/menu_bg.gif', fps=15)\n"
             "e.set_menu(gif=menu_gif, title='MEU JOGO', "
-            "start_action=lambda: e.run_game('jogo.se'))\n"
+            "start_action=lambda: e.run())\n"
             "e.run()\n"
             "```\n"
             "O GIF roda como fundo animado do menu automaticamente.")
@@ -226,8 +226,8 @@ engine.on_event("tecla:space", apertar)""")
             "#.E.#..#.C.#\n"
             "############\n"
             "'''\n"
-            "e = Engine(mode='3d')\n"
-            "e.build_from_ascii(mapa)\n"
+            "e = Engine('Meu Jogo 3D', 800, 480)\n"
+            "e.build_from_ascii(mapa, 'Meu Jogo 3D')\n"
             "e.run()\n"
             "```\n"
             "Controles: WASD mover, Q/E girar. Coloque sprites em "

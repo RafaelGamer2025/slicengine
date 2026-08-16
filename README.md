@@ -1,6 +1,6 @@
 # SlicEngine
 
-**SlicEngine** é uma game engine brasileira feita do zero em **Python**, com suporte a **Lua** e **C**, para criar jogos **3D raycasting estilo Doom** e jogos **2D com tile maps**. Ela cria sua própria extensão de projeto, o **`.se`** (formato SlicEngine), e permite escrever scripts na sua própria linguagem de script em português, totalmente compatível com Lua e Python.
+**SlicEngine** (v0.2.0) é uma game engine brasileira feita do zero em **Python**, com suporte a **Lua** e **C**, para criar jogos **3D raycasting estilo Doom** e jogos **2D com tile maps**. Ela cria sua própria extensão de projeto, o **`.se`** (formato SlicEngine), e permite escrever scripts na sua própria linguagem de script em português, totalmente compatível com Lua e Python.
 
 ## Recursos
 
@@ -20,6 +20,11 @@
 | Modo Local | Executor de scripts na hora + terminal embutido (pip, etc.) |
 | Perfis em DB | Banco SQLite com perfis, projetos e saves |
 | Hierarquia | Árvore de nós com prioridade para assets, scripts, comandos e câmeras |
+| Partículas | Sistema de efeitos com pool, gravidade, fade e cores nomeadas |
+| Sprites Animados | Sprite sheets com modos loop, once e pingpong |
+| Saves | `engine.save_game()` / `engine.load_game()` persistentes (SQLite) |
+| Undo/Redo | `Ctrl+Z`/`Ctrl+Y` no editor, com restauração de entidades |
+| Debug | Console F1 (variáveis/entidades), minimapa (M), screenshot (F2) |
 | Mods/Plugins | Pastas `mods/` e `plugins/` escaneadas automaticamente |
 
 ## Instalação

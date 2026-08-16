@@ -35,6 +35,7 @@ class ModSystem:
         self.engine = engine
         self.plugins: list[Plugin] = []
         self._rt = None
+        self._rts = []
         self._c_libs = []
 
     # ------------------------------------------------------------------
@@ -67,11 +68,15 @@ class ModSystem:
 
     def _load_one(self, p: Plugin):
         if p.kind == "lua":
-            if self._rt is None:
-                self._rt = build_lua_api(self.engine)
+            # cada mod ganha seu próprio runtime (funções de um
+            # runtime não podem ser chamadas por outro no lupa)
+            rt = build_lua_api(self.engine)
             with open(p.path, encoding="utf-8") as f:
                 src = f.read()
-            self._rt.execute(src)
+            rt.execute(src)
+            self._rts.append(rt)
+            if self._rt is None:
+                self._rt = rt
         elif p.kind == "python":
             spec = importlib.util.spec_from_file_location(p.name, p.path)
             mod = importlib.util.module_from_spec(spec)
