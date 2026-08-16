@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.so
+*.dylib
+*.dll
+.pytest_cache/
+.vscode/
+.idea/
+*.se.tmp
+MEMORY.md
