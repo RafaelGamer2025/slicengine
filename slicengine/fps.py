@@ -14,19 +14,45 @@ import pygame
 from .world import Entity
 
 
-class Enemy(Entity):
-    """Inimigo do FPS: persegue o jogador e ataca quando perto."""
+# ---------------- tipos de inimigos ----------------
+# hp, velocidade (tiles/s), dano, alcance de ataque, cooldown, sprite
+ENEMY_TYPES = {
+    "melee":  {"hp": 3, "speed": 1.2, "damage": 10,
+               "attack_range": 0.9, "cooldown": 1.2,
+               "sprite": "enemy_fps.png", "label": "Zumbi"},
+    "fast":   {"hp": 2, "speed": 2.6, "damage": 8,
+               "attack_range": 0.9, "cooldown": 0.8,
+               "sprite": "enemy_fast.png", "label": "Rápido"},
+    "tank":   {"hp": 7, "speed": 0.7, "damage": 20,
+               "attack_range": 1.0, "cooldown": 1.6,
+               "sprite": "enemy_tank.png", "label": "Tanque"},
+    "ranged": {"hp": 4, "speed": 0.9, "damage": 15,
+               "attack_range": 7.0, "cooldown": 1.8,
+               "sprite": "enemy_ranged.png", "label": "Arqueiro"},
+}
 
-    def __init__(self, x=0.0, y=0.0):
+
+class Enemy(Entity):
+    """Inimigo do FPS: persegue o jogador e ataca quando perto.
+
+    Aceita um tipo ("melee", "fast", "tank", "ranged") que define
+    vida, velocidade, dano e alcance. O ranged ataca à distância
+    se tiver linha de visão, senão se aproxima."""
+
+    def __init__(self, x=0.0, y=0.0, kind="melee", label=None):
         super().__init__("enemy", x, y)
-        self.hp = 3              # pontos de vida
-        self.max_hp = 3
-        self.speed = 1.2         # tiles/segundo
-        self.damage = 10         # dano por ataque
-        self.attack_range = 0.9  # distância de ataque
-        self.attack_cooldown = 1.2
+        spec = ENEMY_TYPES.get(kind, ENEMY_TYPES["melee"])
+        self.enemy_kind = kind
+        self.hp = spec["hp"]
+        self.max_hp = spec["hp"]
+        self.speed = spec["speed"]
+        self.damage = spec["damage"]
+        self.attack_range = spec["attack_range"]
+        self.attack_cooldown = spec["cooldown"]
         self.flash = 0.0         # timer de flash vermelho (dano recebido)
         self.stun = 0.0          # timer de atordoamento (levou tiro)
+        self.projectile = None   # projétil do ranged (dict ou None)
+        self.label = label or spec["label"]
         self.alive = True
 
     # ------------------------------------------------------------------
@@ -39,14 +65,42 @@ class Enemy(Entity):
         if self.stun > 0:
             return
 
+        # --- projétil do ranged ---
+        if self.projectile is not None:
+            p = self.projectile
+            px = p["x"] + p["vx"] * 6.0 * dt
+            py = p["y"] + p["vy"] * 6.0 * dt
+            p["x"], p["y"] = px, py
+            p["life"] -= dt
+            if 0 <= int(py) < len(map_grid) and 0 <= int(px) < \
+                    len(map_grid[0]) and map_grid[int(py)][int(px)]:
+                p["life"] = 0                      # bateu na parede
+            if p["life"] > 0 and math.hypot(px - player_x,
+                                            py - player_y) < 0.4:
+                game.take_damage(self.damage)
+                self.projectile = None
+                return
+            if p["life"] <= 0:
+                self.projectile = None
+
         dx = player_x - self.x
         dy = player_y - self.y
         dist = math.hypot(dx, dy)
 
-        if dist > self.attack_range:
+        # ranged atira à distância se tiver linha de visão
+        line_of_sight = (self.enemy_kind == "ranged" and dist < 8.0
+                         and not game._wall_between_to(self.x, self.y))
+
+        if dist > self.attack_range and not line_of_sight:
             # mover na direção do jogador com colisão simples
             if dist > 0:
                 vx, vy = dx / dist, dy / dist
+            # fast desvia melhor: ajusta eixo dominante
+            if self.enemy_kind == "fast":
+                if abs(vx) >= abs(vy):
+                    vy = 0
+                else:
+                    vx = 0
             nx = self.x + vx * self.speed * dt
             ny = self.y + vy * self.speed * dt
             mh = 0.25
@@ -60,8 +114,14 @@ class Enemy(Entity):
             if 0 <= iy < mh_rows and 0 <= int(self.x) < mh_cols \
                     and not map_grid[iy][int(self.x)]:
                 self.y = ny
-        else:
-            # atacar
+        elif line_of_sight and self.projectile is None:
+            # disparar projétil na direção do jogador
+            if dist > 0:
+                vx, vy = dx / dist, dy / dist
+            self.projectile = {"x": self.x, "y": self.y,
+                               "vx": vx, "vy": vy, "life": 2.0}
+        elif dist <= self.attack_range:
+            # atacar de perto (melee/fast/tank)
             self.attack_cooldown -= dt
             if self.attack_cooldown <= 0:
                 game.take_damage(self.damage)
@@ -76,25 +136,69 @@ class Enemy(Entity):
             self.alive = False
 
 
+# ---------------- tipos de coletáveis ----------------
+# efeito aplicado ao pegar
+COLLECTIBLES = {
+    "medkit":     {"sprite": "medkit.png", "sound": "sounds/heal.wav",
+                   "label": "+25 VIDA"},
+    "power_ammo": {"sprite": "power_ammo.png", "sound": "sounds/powerup.wav",
+                   "label": "+10 MUNICAO"},
+    "power_speed": {"sprite": "power_speed.png", "sound": "sounds/powerup.wav",
+                    "label": "VELOCIDADE x1.5 (5s)"},
+    "power_damage": {"sprite": "power_damage.png",
+                     "sound": "sounds/powerup.wav",
+                     "label": "DANO x2 (5s)"},
+    "power_health": {"sprite": "power_health.png",
+                     "sound": "sounds/heal.wav",
+                     "label": "+15 VIDA"},
+}
+
+
+class Collectible:
+    """Item colecionável no chão do mapa (medkit ou power-up)."""
+
+    def __init__(self, x=0.0, y=0.0, kind="medkit"):
+        self.kind = kind
+        self.x, self.y = x, y
+        self.collected = False
+        self.spec = COLLECTIBLES.get(kind, COLLECTIBLES["medkit"])
+        self.bob = random.random() * math.pi * 2   # animação flutuante
+
+    def sprite_name(self):
+        return self.spec["sprite"]
+
+
 class FPSGame:
-    """Camada de jogo FPS completa sobre o Raycaster."""
+    """Camada de jogo FPS completa sobre o Raycaster.
+
+    Além do tiro e da IA, gerencia inimigos variados (melee, fast,
+    tank, ranged) e itens colecionáveis (medkit, power-ups)."""
 
     def __init__(self, engine, player_sprite=None, enemy_sprite=None,
                  gun_sprite=None, wall_hit_sprite=None):
         self.engine = engine
         self.rc = engine.raycaster
         self.player_hp = 100
+        self.max_hp = 100
         self.ammo = 50
         self.kills = 0
+        self.picked = 0
         self.state = "playing"      # playing, gameover, win
         self.damage_flash = 0.0     # tela vermelha ao tomar dano
         self.muzzle_flash = 0.0     # flash da arma ao atirar
         self.hit_marker = 0.0       # X de acerto na mira
         self.gun_kick = 0.0         # recuo visual da arma
+        # efeitos de power-up temporários
+        self.speed_boost = 0.0      # multiplicador de movimento
+        self.damage_boost = 0.0     # multiplicador de dano
+        self.move_speed = 3.0       # base tiles/s
         self._player_sprite = player_sprite or pygame.Surface((16, 16))
         self._enemy_sprite = enemy_sprite or pygame.Surface((16, 16))
         self._gun_sprite = gun_sprite
         self._wall_hit_sprite = wall_hit_sprite
+        self._collectibles = []     # lista de Collectible do jogo
+        self._status_msg = None     # mensagem temporária (item pego)
+        self._status_timer = 0.0
 
     # ------------------------------------------------------------------
     def enemies(self):
@@ -110,9 +214,13 @@ class FPSGame:
         self.muzzle_flash = max(0.0, self.muzzle_flash - dt * 6)
         self.hit_marker = max(0.0, self.hit_marker - dt * 3)
         self.gun_kick = max(0.0, self.gun_kick - dt * 5)
+        self.speed_boost = max(0.0, self.speed_boost - dt)
+        self.damage_boost = max(0.0, self.damage_boost - dt)
+        self._status_timer = max(0.0, self._status_timer - dt)
         m = self.rc.map
         for e in self.enemies():
             e.update(dt, m, self.rc.x, self.rc.y, self)
+        self._update_collectibles(dt)
         if not self.enemies():
             self.state = "win"
             self.engine.disparar("vitoria")
@@ -165,7 +273,7 @@ class FPSGame:
             # verificar parede entre jogador e alvo (raio DDA até d)
             if not self._wall_between(d):
                 alive_before = e.alive
-                e.hit(1)
+                e.hit(self.effective_damage())
                 self.hit_marker = 1.0
                 hit = True
                 if alive_before and not e.alive:
@@ -184,13 +292,86 @@ class FPSGame:
                                              self.rc.angle)
         return dist <= max_dist
 
+    def _wall_between_to(self, tx, ty):
+        """Verifica se há parede entre o jogador e um ponto (tx, ty).
+        Usa o raio do cast e a distância perpendicular."""
+        dist, _tile, _side, _u = self.rc.cast(self.rc.x, self.rc.y,
+                                              self.rc.angle)
+        ang = math.atan2(ty - self.rc.y, tx - self.rc.x)
+        d = math.hypot(tx - self.rc.x, ty - self.rc.y)
+        diff = math.atan2(math.sin(ang - self.rc.angle),
+                          math.cos(ang - self.rc.angle))
+        # alvo na direção da mira (cone amplo) e parede mais perto que ele
+        return abs(diff) < 0.4 and dist <= d
+
     # ------------------------------------------------------------------
     def respawn_enemies(self, positions):
-        """Recria inimigos nas posições dadas (para reinício)."""
+        """Recria inimigos nas posições dadas (para reinício).
+
+        ``positions`` aceita tuplas (x, y) — inimigo melee — ou
+        (x, y, tipo) — ex.: (4.5, 4.5, "ranged")."""
         self.engine.world.entities = [
             e for e in self.engine.world.entities if e.kind != "enemy"]
-        for x, y in positions:
-            self.engine.world.entities.append(Enemy(x, y))
+        for pos in positions:
+            if len(pos) == 3:
+                self.engine.world.entities.append(
+                    Enemy(pos[0], pos[1], kind=pos[2]))
+            else:
+                self.engine.world.entities.append(Enemy(pos[0], pos[1]))
+
+    # ------------------------------------------------------------------
+    # Itens colecionáveis
+    # ------------------------------------------------------------------
+    def spawn_collectible(self, x, y, kind="medkit"):
+        """Cria um item colecionável no mapa."""
+        self._collectibles.append(Collectible(x, y, kind))
+
+    def spawn_collectibles(self, items):
+        """Cria vários itens. ``items``: lista de (x, y) ou (x, y, kind)."""
+        for it in items:
+            if len(it) == 3:
+                self.spawn_collectible(it[0], it[1], kind=it[2])
+            else:
+                self.spawn_collectible(it[0], it[1])
+
+    def _update_collectibles(self, dt):
+        """Anima e coleta itens próximos do jogador."""
+        px, py = self.rc.x, self.rc.y
+        for c in self._collectibles:
+            if c.collected:
+                continue
+            c.bob += dt * 3.0
+            d = math.hypot(c.x - px, c.y - py)
+            if d < 0.5:
+                c.collected = True
+                self._collect(c)
+
+    def _collect(self, c):
+        """Aplica o efeito do item coletado."""
+        sound = c.spec.get("sound")
+        if sound:
+            try:
+                self.engine._api_tocar_som(sound)
+            except Exception:
+                pass
+        if c.kind == "medkit":
+            self.player_hp = min(self.max_hp, self.player_hp + 25)
+        elif c.kind == "power_ammo":
+            self.ammo += 10
+        elif c.kind == "power_speed":
+            self.speed_boost = 5.0
+        elif c.kind == "power_damage":
+            self.damage_boost = 5.0
+        elif c.kind == "power_health":
+            self.player_hp = min(self.max_hp, self.player_hp + 15)
+        self.picked += 1
+        self._status_msg = f"{c.spec['label']} PEGO!"
+        self._status_timer = 1.5
+        self.engine.disparar("item_coletado", {"item": c.kind})
+
+    def effective_damage(self):
+        """Dano por tiro considerando o boost de power-up."""
+        return 2 if self.damage_boost > 0 else 1
 
     # ------------------------------------------------------------------
     def render_hud(self, surface):
@@ -224,6 +405,24 @@ class FPSGame:
         kills = font.render(f"ELIMINADOS {self.kills}  RESTANTES {alive}",
                             True, (255, 255, 255))
         surface.blit(kills, (w - kills.get_width() - 16, h - 37))
+
+        # --- efeitos ativos de power-up ---
+        fx = w // 2
+        if self.damage_boost > 0:
+            lbl = font.render(f"DANO x2 {self.damage_boost:.1f}s",
+                              True, (255, 140, 40))
+            surface.blit(lbl, (fx - lbl.get_width() // 2, 16))
+            fx += 90
+        if self.speed_boost > 0:
+            lbl = font.render(f"RAPIDO {self.speed_boost:.1f}s",
+                              True, (80, 160, 255))
+            surface.blit(lbl, (fx - lbl.get_width() // 2, 16))
+
+        # --- mensagem de item pego ---
+        if self._status_timer > 0 and self._status_msg:
+            lbl = font_big.render(self._status_msg, True,
+                                  (255, 220, 60))
+            surface.blit(lbl, (w // 2 - lbl.get_width() // 2, 60))
 
         # --- mira ---
         cx, cy = w // 2, (h - 48) // 2 + 20
@@ -261,6 +460,33 @@ class FPSGame:
             surface.blit(red, (0, 0))
 
         # --- overlays de estado ---
+        # --- sprites dos itens no chão (flutuando) ---
+        for c in self._collectibles:
+            if c.collected:
+                continue
+            d = math.hypot(c.x - self.rc.x, c.y - self.rc.y)
+            if d > 0.3 and d < 12:
+                surf = self.engine.assets.sprite(
+                    {"medkit": "medkit.png",
+                     "power_ammo": "power_ammo.png",
+                     "power_speed": "power_speed.png",
+                     "power_damage": "power_damage.png",
+                     "power_health": "power_health.png"}.get(c.kind,
+                                                             "medkit.png"))
+                if surf is not None:
+                    # projeção simples: escala conforme a distância
+                    size = max(8, int(26 / d))
+                    s = pygame.transform.smoothscale(surf, (size, size))
+                    ang = math.atan2(c.y - self.rc.y, c.x - self.rc.x)
+                    diff = math.atan2(math.sin(ang - self.rc.angle),
+                                      math.cos(ang - self.rc.angle))
+                    if abs(diff) < 0.7:
+                        cx, cy = w // 2 + int(diff * w * 0.55), \
+                            (h - 48) // 2 + 20
+                        bob_y = int(4 * math.sin(c.bob))
+                        surface.blit(s, (cx - size // 2, cy - size // 2
+                                         + bob_y - 60))
+
         if self.state == "gameover":
             self._overlay(surface, "GAME OVER",
                           "Pressione R para reiniciar", (220, 40, 40))

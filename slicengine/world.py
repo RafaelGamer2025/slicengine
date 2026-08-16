@@ -143,6 +143,15 @@ class World:
         world.flags["mode"] = "2d"
         return world
 
+    def add_entity(self, kind: str, x: float, y: float):
+        """Cria e adiciona uma entidade ao mundo (usada pelo editor
+        em drag & drop)."""
+        if kind in ("player", "enemy", "coin"):
+            self.entities.append(Entity(kind, float(x), float(y)))
+        else:
+            self.entities.append(Entity(kind, float(x), float(y)))
+        return self.entities[-1]
+
     def to_dict(self) -> dict:
         return {
             "tilemap": self.tilemap.to_dict(),

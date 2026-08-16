@@ -1,14 +1,16 @@
 # SlicEngine
 
-**SlicEngine** é uma game engine brasileira feita do zero em **Python**, com suporte a **Lua** e **C**, para criar jogos **3D raycasting estilo Doom** e jogos **2D com tile maps**. Ela cria sua própria extensão de projeto, o **`.se`** (formato SlicEngine), e permite escrever scripts na sua própria linguagem de script em português, totalmente compatível com Lua e Python.
+**SlicEngine** é uma game engine brasileira feita do zero em **Python**, com suporte a **Lua** e **C**, para criar jogos **3D estilo Doom** (raycasting E 3D real por projeção de polígonos) e jogos **2D com tile maps e física de plataforma**. Ela cria sua própria extensão de projeto, o **`.se`** (formato SlicEngine), e permite escrever scripts na sua própria linguagem de script em português, totalmente compatível com Lua e Python.
 
 ## Recursos
 
 | Recurso | Descrição |
 |---|---|
 | 3D Raycasting | Renderizador estilo Doom: DDA, paredes texturizadas, sprites billboard, fog, z-buffer |
+| 3D Real | Renderizador por projeção de polígonos: Meshes, z-buffer por pixel, sombreamento por face (módulo separado do raycasting) |
 | 2D Tile Maps | Mapas em camadas, tile size configurável, importação de tilesets |
-| Editor com Pincel | Editor integrado: pincel, borracha e preenchimento para pintar tiles |
+| Plataforma 2D | Física real: gravidade, pulo, colisão AABB, câmera lateral, inimigos patrulhando |
+| Editor Visual | Editor de tile maps com pincel, borracha, preenchimento e drag & drop de tiles/entidades, undo/redo |
 | Scripting em Português | Linguagem própria `.sl`: `quando tecla "espaço" for pressionada: ...` |
 | Lua | Mods Lua completos com API da engine (`engine.on_event`, `engine.set_var`...) |
 | C (nativo) | Plugins `.so/.dll/.dylib` carregados via ctypes com interface padrão |
@@ -21,6 +23,8 @@
 | Perfis em DB | Banco SQLite com perfis, projetos e saves |
 | Hierarquia | Árvore de nós com prioridade para assets, scripts, comandos e câmeras |
 | Mods/Plugins | Pastas `mods/` e `plugins/` escaneadas automaticamente |
+| Arquitetura ECS | GameObject/Component/Transform, Scene, SceneManager, EventBus e Logger central |
+| Save System | Saves de jogo em slots com backup/recuperação, settings, autosave e validação de caminhos |
 
 ## Instalação
 
@@ -40,6 +44,8 @@ python -m slicengine --ai "pergunta"  # perguntar à IA assistente
 python -m slicengine --shell          # shell interativo (pip etc.)
 python examples/demo_fps.py           # demo FPS 3D completa (jogo jogável)
 python examples/demo_3d.py            # demo 3D raycasting
+python examples/demo_3d_real.py       # demo 3D real (projeção de polígonos, mouse para olhar)
+python examples/demo_platform.py      # demo 2D plataforma lateral (física real)
 python examples/demo_2d.py            # demo 2D tile map
 ```
 
@@ -52,6 +58,14 @@ python examples/demo_2d.py            # demo 2D tile map
 **3D Raycasting estilo Doom:**
 
 ![3D Raycasting](tests/shots/demo_3d.png)
+
+**3D real — projeção de polígonos:**
+
+![3D Real](tests/shots/demo_3d_real_gui.png)
+
+**Demo 2D plataforma lateral (física real):**
+
+![Plataforma 2D](tests/shots/demo_platform.png)
 
 **Demo FPS completa estilo Doom (jogável):**
 
@@ -77,15 +91,19 @@ slicengine/
 │   ├── modsystem.py   # sistema de mods/plugins (Lua, Python, C, .sl)
 │   ├── seformat.py    # leitura/escrita do formato .se
 │   ├── assets.py      # gerenciador de sprites, sons, músicas e GIFs
+│   ├── renderer3d.py  # renderizador 3D real (projeção de polígonos)
+│   ├── platform.py    # jogo de plataforma 2D com física real
 │   ├── hierarchy.py   # hierarquia de nós (assets, scripts, comandos, câmeras)
+│   ├── gameobjects.py # GameObject/Component/Transform/Scene/SceneManager/EventBus/Logger
+│   ├── savesystem.py  # SaveSystem: saves, settings, autosave, backup
 │   ├── aiscript.py    # IA assistente embutida
 │   ├── local.py       # executor local de scripts e terminal embutido
 │   └── profile_db.py  # perfis e projetos em SQLite
-├── examples/          # demos (demo_3d.py, demo_2d.py, demo_game.se)
+├── examples/          # demos (fps, 3d, 3d_real, platform, 2d)
 ├── mods/              # mods de exemplo (demo.lua, exemplo.sl)
 ├── plugins/           # plugin C de exemplo (noise.c + wrapper noise.py)
 ├── assets/            # sprites e texturas de demonstração
-├── tests/             # testes automatizados
+├── tests/             # testes automatizados (inclusive GUI com xvfb)
 └── tools/             # geradores (assets, pacote .se de demo)
 ```
 
@@ -142,6 +160,47 @@ Um pacote `.se` é um arquivo zip com `manifest.json`, `world.json`, scripts emb
 | Mouse / ← → | Olhar (modo 3D) |
 | Espaço | Evento personalizado (configurável nos scripts) |
 | E | Interagir (modo editor: testar mapa) |
+
+## Arquitetura ECS e Save System
+
+Além dos renderizadores, a engine possui uma camada arquitetural incremental (`slicengine/gameobjects.py` e `slicengine/savesystem.py`) que não altera nenhum módulo existente:
+
+```python
+from slicengine.gameobjects import GameObject, Component, SceneManager
+
+class Movimentar(Component):
+    def update(self, dt):
+        self.game_object.transform.position += Vector2(100 * dt, 0)
+
+sm = SceneManager()
+fase = sm.new_scene("Fase1")
+heroi = GameObject("Heroi")
+heroi.tag = "player"
+heroi.add_component(Movimentar())
+fase.add(heroi)
+sm.save("Fase1", "saves/fase1.json")
+```
+
+| Classe | Papel |
+|---|---|
+| Vector2 / Transform | Sistema espacial oficial: posição local/global, rotação, escala, pai/filhos |
+| Component | Comportamento reutilizável com ciclo de vida (start/update/on_destroy) |
+| GameObject | Nó da hierarquia com nome, tag, layer, componentes, clonagem e ativação |
+| Scene / SceneManager | Cenas oficiais com save/load, troca, duplicação, renomeação e histórico |
+| EventBus | Barramento global: `SceneLoaded`, `GameObjectDestroyed`, `PlayStarted`... |
+| Logger | Log central com níveis DEBUG→CRITICAL (substitui print() espalhado) |
+| SaveSystem | Saves em slots (1–9) com backup/recuperação, settings, autosave e validação de caminhos |
+
+## Testes
+
+```bash
+PYTHONPATH=. python3 tests/test_engine.py        # 15 testes do núcleo
+PYTHONPATH=. python3 tests/test_fps.py           # 28 testes do sistema FPS
+PYTHONPATH=. python3 tests/test_editor_dd.py     # editor drag & drop
+PYTHONPATH=. python3 tests/test_architecture.py  # ECS, Scene, SaveSystem
+xvfb-run -a python3 tests/test_platform_gui.py   # demo plataforma (GUI)
+xvfb-run -a python3 tests/test_3d_real_gui.py    # 3D real (GUI)
+```
 
 ## Licença
 

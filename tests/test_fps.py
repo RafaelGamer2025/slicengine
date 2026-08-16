@@ -115,7 +115,36 @@ def main():
     fps.update(0.016)
     check("estado vitoria", fps.state == "win")
 
-    # 9. render + HUD sem erro
+    # 9. tipos de inimigos
+    fps.respawn_enemies([(3.5, 1.5), (5.5, 1.5, "fast"), (7.5, 1.5, "tank"),
+                         (3.5, 3.5, "ranged")])
+    kinds = {e.enemy_kind for e in fps.enemies()}
+    check("inimigos variados", kinds == {"melee", "fast", "tank", "ranged"})
+    specs = {e.enemy_kind: e for e in fps.enemies()}
+    check("tank tem mais vida", specs["tank"].hp == 7)
+    check("fast é mais veloz", specs["fast"].speed > specs["melee"].speed)
+    check("ranged ataca de longe", specs["ranged"].attack_range > 5)
+
+    # 10. coletáveis
+    fps.spawn_collectibles([(4.5, 3.5, "medkit"), (5.5, 1.5, "power_ammo"),
+                            (7.5, 3.5, "power_damage")])
+    check("3 itens criados", len(fps._collectibles) == 3)
+    old_hp = fps.player_hp
+    fps.rc.x, fps.rc.y = 4.5, 3.5   # andar até o medkit
+    fps._update_collectibles(0.016)
+    check("medkit cura +25", fps.player_hp == min(100, old_hp + 25))
+    check("item marcado coletado", fps._collectibles[0].collected)
+    fps.ammo = 5
+    fps.rc.x, fps.rc.y = 5.5, 1.5
+    fps._update_collectibles(0.016)
+    check("power_ammo +10 munição", fps.ammo == 15)
+    fps.damage_boost = 0.0
+    fps.rc.x, fps.rc.y = 7.5, 3.5
+    fps._update_collectibles(0.016)
+    check("power_damage ativo", fps.damage_boost == 5.0)
+    check("tiro dobra com boost", fps.effective_damage() == 2)
+
+    # 11. render + HUD sem erro
     surf = engine.screen
     fps.rc.render(surf, [{"x": 5.5, "y": 5.5, "surface": pygame.Surface((16, 16))}])
     fps.render_hud(surf)

@@ -148,6 +148,91 @@ d.ellipse([39, 17, 47, 25], fill=(20, 0, 0, 255))
 d.polygon([(20, 42), (44, 42), (40, 52), (24, 52)], fill=(10, 0, 0, 255))
 fps_enemy.save(os.path.join(OUT, "enemy_fps.png"))
 
+# ---------------- inimigos variados do FPS ----------------
+# ranged (vermelho com mira/arma) — 64x64
+e_fps_ranged = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+d = ImageDraw.Draw(e_fps_ranged)
+d.ellipse([6, 6, 58, 58], fill=(190, 70, 200, 255))
+d.ellipse([14, 14, 28, 28], fill=(255, 240, 60, 255))
+d.ellipse([36, 14, 50, 28], fill=(255, 240, 60, 255))
+d.ellipse([17, 17, 25, 25], fill=(20, 0, 0, 255))
+d.ellipse([39, 17, 47, 25], fill=(20, 0, 0, 255))
+d.ellipse([24, 38, 40, 54], fill=(60, 20, 80, 255))  # focinho/arma
+d.rectangle([28, 40, 36, 48], fill=(10, 10, 10, 255))  # cano
+e_fps_ranged.save(os.path.join(OUT, "enemy_ranged.png"))
+
+# fast (verde, esguio) — 64x64
+e_fps_fast = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+d = ImageDraw.Draw(e_fps_fast)
+d.ellipse([10, 8, 54, 56], fill=(60, 180, 60, 255))
+d.ellipse([16, 14, 28, 26], fill=(255, 255, 100, 255))
+d.ellipse([36, 14, 48, 26], fill=(255, 255, 100, 255))
+d.ellipse([18, 16, 24, 22], fill=(0, 0, 0, 255))
+d.ellipse([38, 16, 44, 22], fill=(0, 0, 0, 255))
+# sorriso malvado
+d.arc([20, 40, 44, 56], 180, 360, fill=(0, 0, 0, 255), width=3)
+e_fps_fast.save(os.path.join(OUT, "enemy_fast.png"))
+
+# tank (cinza, enorme) — 64x64
+e_fps_tank = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+d = ImageDraw.Draw(e_fps_tank)
+d.ellipse([2, 2, 62, 62], fill=(90, 90, 100, 255))
+d.ellipse([10, 10, 26, 26], fill=(255, 80, 80, 255))
+d.ellipse([38, 10, 54, 26], fill=(255, 80, 80, 255))
+d.ellipse([14, 14, 22, 22], fill=(0, 0, 0, 255))
+d.ellipse([42, 14, 50, 22], fill=(0, 0, 0, 255))
+d.rectangle([18, 40, 46, 50], fill=(30, 30, 40, 255))  # maxila
+e_fps_tank.save(os.path.join(OUT, "enemy_tank.png"))
+
+# ---------------- coletáveis do FPS ----------------
+# medkit (kit médico branco/vermelho)
+medkit = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+d = ImageDraw.Draw(medkit)
+d.rounded_rectangle([4, 10, 44, 40], radius=4, fill=(235, 235, 240, 255))
+d.rounded_rectangle([4, 10, 44, 40], radius=4, outline=(120, 120, 130, 255),
+                    width=2)
+# cruz vermelha
+d.rectangle([20, 18, 28, 32], fill=(220, 40, 40, 255))
+d.rectangle([15, 22, 33, 28], fill=(220, 40, 40, 255))
+medkit.save(os.path.join(OUT, "medkit.png"))
+
+# power-up munição (caixa lourada com bala)
+ammo = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+d = ImageDraw.Draw(ammo)
+d.rounded_rectangle([6, 12, 42, 40], radius=3, fill=(180, 130, 50, 255))
+d.rounded_rectangle([6, 12, 42, 40], radius=3, outline=(90, 60, 20, 255),
+                    width=2)
+d.rectangle([12, 16, 36, 20], fill=(255, 220, 120, 255))
+d.rectangle([21, 24, 27, 36], fill=(60, 50, 40, 255))  # bala
+ammo.save(os.path.join(OUT, "power_ammo.png"))
+
+# power-up velocidade (raio azul)
+spd = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+d = ImageDraw.Draw(spd)
+d.ellipse([4, 4, 44, 44], fill=(40, 120, 255, 255))
+d.ellipse([8, 8, 40, 40], fill=(90, 170, 255, 255))
+d.polygon([(26, 8), (16, 26), (24, 26), (22, 40), (34, 20), (26, 20)],
+          fill=(255, 255, 100, 255))
+spd.save(os.path.join(OUT, "power_speed.png"))
+
+# power-up dano (fogo vermelho)
+dmg = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+d = ImageDraw.Draw(dmg)
+d.ellipse([4, 4, 44, 44], fill=(220, 40, 40, 255))
+d.ellipse([8, 8, 40, 40], fill=(255, 120, 40, 255))
+d.ellipse([16, 16, 32, 32], fill=(255, 230, 80, 255))
+d.polygon([(24, 10), (18, 24), (30, 24)], fill=(255, 255, 200, 255))
+dmg.save(os.path.join(OUT, "power_damage.png"))
+
+# power-up saúde (coração verde)
+heal = Image.new("RGBA", (48, 48), (0, 0, 0, 0))
+d = ImageDraw.Draw(heal)
+d.ellipse([4, 4, 44, 44], fill=(40, 200, 80, 255))
+d.ellipse([8, 8, 40, 40], fill=(90, 240, 130, 255))
+d.polygon([(24, 12), (14, 28), (34, 28)], fill=(255, 255, 255, 255))
+d.rectangle([18, 28, 30, 36], fill=(255, 255, 255, 255))
+heal.save(os.path.join(OUT, "power_health.png"))
+
 # ---------------- sons procedurais ----------------
 try:
     import wave
@@ -209,6 +294,23 @@ try:
                * 2200 for i in range(n)]
     write_wav(os.path.join(SOUNDS, "inicio.wav"), samples)
 
+    # powerup.wav — jingle ascendente
+    n = int(0.35 * SR)
+    samples = [math.sin(2 * math.pi * (440 + 440 * i / n) * i / SR)
+               * env(i, n, r=0.25) * 4500 for i in range(n)]
+    write_wav(os.path.join(SOUNDS, "powerup.wav"), samples)
+
+    # heal.wav — tom suave ascendente em duas notas
+    n = int(0.45 * SR)
+    samples = [math.sin(2 * math.pi * (523 + 261 * (i / n > 0.5)) * i / SR)
+               * env(i, n, r=0.3) * 4000 for i in range(n)]
+    write_wav(os.path.join(SOUNDS, "heal.wav"), samples)
+
+    # morte.wav — gemido descendente
+    n = int(0.5 * SR)
+    samples = [math.sin(2 * math.pi * (400 - 280 * i / n) * i / SR)
+               * env(i, n, r=0.35) * 6000 for i in range(n)]
+    write_wav(os.path.join(SOUNDS, "morte.wav"), samples)
     print("sons gerados em", SOUNDS)
 except Exception as e:
     print("aviso: sons não gerados:", e)

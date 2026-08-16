@@ -3,10 +3,15 @@ SlicEngine — Demo FPS 3D completo estilo Doom.
 
 Jogo jogável com:
 - Inimigos interativos que perseguem e atacam o jogador
+- 4 tipos de inimigos: Zumbi (melee), Rápido, Tanque e Arqueiro (atira
+  à distância com projétil)
+- Itens colecionáveis: medkit (+25 vida), caixas de munição (+10) e
+  power-ups de velocidade (5s) e dano dobrado (5s)
 - Sistema de tiro (clique do mouse ou F): raio na mira, gasto de munição,
   dano nos inimigos, hit markers
-- HUD estilo Doom: vida, munição, inimigos restantes, arma, flashes
-- Música de fundo e sons de tiro/dano
+- HUD estilo Doom: vida, munição, inimigos restantes, arma, flashes,
+  contadores de power-ups ativos e aviso de item pego
+- Música de fundo e sons de tiro/dano/cura/power-up
 
 Controles:
 - WASD / Setas: andar       Q/E ou mouse: olhar
@@ -53,19 +58,31 @@ def main():
         gun = engine.assets.sprite("assets/gun.png")
     except Exception:
         gun = None
-    try:
-        enemy_sprite = engine.assets.sprite("assets/enemy_fps.png")
-    except Exception:
-        enemy_sprite = None
 
-    # converter inimigos genéricos em Enemy (FPSGame precisa)
+    # converter inimigos genéricos em Enemy com tipos variados
+    enemy_sprites = {}
+    for kind in ("melee", "fast", "tank", "ranged"):
+        try:
+            from slicengine.fps import ENEMY_TYPES  # noqa: E402
+            name = ENEMY_TYPES[kind]["sprite"]
+            enemy_sprites[kind] = engine.assets.sprite(f"assets/{name}")
+        except Exception:
+            enemy_sprites[kind] = None
+
     engine.world.entities = [
-        Enemy(e.x, e.y) if e.kind == "enemy" else e
-        for e in engine.world.entities]
+        Enemy(e.x, e.y, kind=kind) if e.kind == "enemy" else e
+        for e, kind in zip(engine.world.entities,
+                           ["melee", "fast", "tank", "ranged", "melee",
+                            "fast"])]
 
-    fps = FPSGame(engine, gun_sprite=gun, enemy_sprite=enemy_sprite)
-    fps.respawn_enemies([(4.5, 2.5), (8.5, 7.5), (12.5, 2.5),
-                         (3.5, 9.5), (14.5, 8.5), (10.5, 6.5)])
+    fps = FPSGame(engine, gun_sprite=gun)
+    fps.respawn_enemies([(4.5, 2.5, "melee"), (8.5, 7.5, "fast"),
+                         (12.5, 2.5, "tank"), (3.5, 9.5, "ranged"),
+                         (14.5, 8.5, "melee"), (10.5, 6.5, "fast")])
+    # itens colecionáveis espalhados pelo mapa
+    fps.spawn_collectibles([(6.5, 5.5, "medkit"), (15.5, 4.5, "power_ammo"),
+                            (2.5, 6.5, "power_speed"), (9.5, 9.5, "medkit"),
+                            (13.5, 9.5, "power_damage")])
 
     # música de fundo (streaming)
     try:
@@ -108,11 +125,19 @@ def main():
         mx, *_ = pygame.mouse.get_rel()
         fps.rc.angle += mx * 0.002
 
-        # sprites dos inimigos vivos
-        sprites = [
-            {"x": e.x, "y": e.y, "surface": enemy_sprite}
-            for e in engine.world.entities
-            if e.kind == "enemy" and e.alive]
+        # sprites dos inimigos vivos (sprite por tipo)
+        sprites = []
+        for e in engine.world.entities:
+            if e.kind == "enemy" and e.alive:
+                sprites.append({"x": e.x, "y": e.y,
+                                "surface": enemy_sprites.get(e.enemy_kind)
+                                or pygame.Surface((16, 16))})
+                # projétil do ranged visível
+                if getattr(e, "projectile", None):
+                    sprites.append({"x": e.projectile["x"],
+                                    "y": e.projectile["y"],
+                                    "surface": None,
+                                    "is_projectile": True})
 
         fps.rc.render(engine.screen, sprites)
         fps.render_hud(engine.screen)
