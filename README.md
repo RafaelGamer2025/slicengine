@@ -42,6 +42,16 @@ python examples/demo_3d.py            # demo 3D raycasting
 python examples/demo_2d.py            # demo 2D tile map
 ```
 
+## Demonstração Visual
+
+**Menu com GIF animado:**
+
+![Menu da SlicEngine](tests/shots/menu_real.png)
+
+**3D Raycasting estilo Doom:**
+
+![3D Raycasting](tests/shots/demo_3d.png)
+
 ## Estrutura do Projeto
 
 ```
