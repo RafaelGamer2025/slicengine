@@ -17,6 +17,7 @@ pública da Engine. As telas são desenhadas por cima do loop com
 ``state = "menuscreen"`` e retornam a ação escolhida por callback.
 """
 import os
+import time
 import pygame
 from . import utils
 
@@ -33,13 +34,19 @@ def _sysfont(size, bold=False):
     return pygame.font.Font(None, size * 2)
 
 
-BG = (12, 12, 20)
-ACCENT = (255, 220, 60)
-TEXT = (235, 235, 240)
-DIM = (150, 150, 170)
-BTN_BG = (45, 45, 60)
-BTN_HOVER = (70, 70, 100)
-ITEM_BG = (32, 32, 48)
+# Cores modernas e profissionais
+BG = (18, 18, 28)
+BG_DARK = (12, 12, 18)
+ACCENT = (0, 180, 255)      # Azul Neon
+ACCENT_LIGHT = (80, 210, 255)
+TEXT = (240, 240, 245)
+DIM = (120, 125, 140)
+BTN_BG = (35, 35, 50)
+BTN_HOVER = (50, 50, 75)
+BTN_BORDER = (60, 65, 85)
+ITEM_BG = (28, 28, 40)
+DANGER = (255, 80, 80)
+SUCCESS = (80, 255, 150)
 
 
 class MenuScreen:
@@ -324,130 +331,195 @@ class MenuScreen:
     def screen_size(self):
         return self.engine.screen.get_size()
 
+    def _draw_gradient_bg(self, surface):
+        sw, sh = surface.get_size()
+        for y in range(sh):
+            # Gradiente vertical sutil
+            r = BG[0] - int(6 * y / sh)
+            g = BG[1] - int(6 * y / sh)
+            b = BG[2] - int(10 * y / sh)
+            pygame.draw.line(surface, (max(0, r), max(0, g), max(0, b)), (0, y), (sw, y))
+
     def draw(self):
         sw, sh = self.screen_size()
         s = self.engine.screen
-        s.fill(BG)
-        big = self._font(46, True)
-        small = self._font(22)
-        tiny = self._font(16)
+        self._draw_gradient_bg(s)
+        
+        # Desenhar partículas de fundo ou grid sutil
+        for i in range(0, sw, 40):
+            pygame.draw.line(s, (25, 25, 35), (i, 0), (i, sh))
+        for i in range(0, sh, 40):
+            pygame.draw.line(s, (25, 25, 35), (0, i), (sw, i))
+
+        big = self._font(52, True)
+        small = self._font(20)
+        tiny = self._font(14)
+        header_font = self._font(28, True)
 
         if self.screen == self.MAIN:
-            t = big.render("SlicEngine", True, ACCENT)
-            s.blit(t, (sw // 2 - t.get_width() // 2, 100))
-            sub = small.render(f"Perfil ativo: {self.engine.profile_name}",
-                               True, TEXT)
-            s.blit(sub, (sw // 2 - sub.get_width() // 2, 170))
+            # Efeito de brilho no título
+            t_glow = big.render("SLICENGINE", True, (0, 100, 200))
+            s.blit(t_glow, (sw // 2 - t_glow.get_width() // 2 + 2, 92))
+            t = big.render("SLICENGINE", True, ACCENT)
+            s.blit(t, (sw // 2 - t.get_width() // 2, 90))
+            
+            sub = small.render(f"PERFIL ATIVO: {self.engine.profile_name.upper()}",
+                               True, DIM)
+            s.blit(sub, (sw // 2 - sub.get_width() // 2, 160))
+            
+            pygame.draw.line(s, ACCENT, (sw // 2 - 100, 190), (sw // 2 + 100, 190), 2)
+
             for i, it in enumerate(self._main_items()):
                 r = self._visible_items()[i]
-                col = BTN_HOVER if r.collidepoint(
-                    pygame.mouse.get_pos()) else BTN_BG
+                mpos = pygame.mouse.get_pos()
+                is_hover = r.collidepoint(mpos)
+                
+                col = BTN_HOVER if is_hover else BTN_BG
+                border_col = ACCENT if is_hover else BTN_BORDER
+                
+                # Sombra/Brilho externa
+                if is_hover:
+                    glow_r = r.inflate(4, 4)
+                    pygame.draw.rect(s, (0, 100, 200), glow_r, border_radius=8, width=1)
+                
                 pygame.draw.rect(s, col, r, border_radius=6)
-                t = small.render(f"[{i + 1}] {it}", True, TEXT)
-                s.blit(t, (r.x + 14, r.y + 8))
-            ver = tiny.render(f"SlicEngine {utils.VERSION}  |  "
-                              f"ESC = sair", True, DIM)
-            s.blit(ver, (12, sh - 30))
+                pygame.draw.rect(s, border_col, r, border_radius=6, width=2)
+                
+                t = small.render(f"{i + 1}. {it.upper()}", True, TEXT if not is_hover else ACCENT_LIGHT)
+                s.blit(t, (r.x + 20, r.y + (r.height - t.get_height()) // 2))
+                
+            ver = tiny.render(f"ENGINE VERSION {utils.VERSION}  |  "
+                              f"ESC PARA SAIR", True, DIM)
+            s.blit(ver, (20, sh - 30))
         elif self.screen == self.NEW:
-            t = big.render("Novo Jogo", True, ACCENT)
-            s.blit(t, (sw // 2 - t.get_width() // 2, 70))
-            lbl = small.render("Nome do jogo:", True, TEXT)
-            s.blit(lbl, (sw // 2 - lbl.get_width() // 2, 160))
+            t = header_font.render("CRIAR NOVO PROJETO", True, ACCENT)
+            s.blit(t, (sw // 2 - t.get_width() // 2, 80))
+            
+            lbl = small.render("NOME DO JOGO:", True, DIM)
+            s.blit(lbl, (sw // 2 - 160, 150))
+            
             ir = self._input_rect()
-            pygame.draw.rect(s, BTN_HOVER if self.input_focus else BTN_BG,
-                             ir, border_radius=4)
-            f = small.render(self.input_text + ("_" if self.input_focus
-                                                else ""), True, TEXT)
-            s.blit(f, (ir.x + 12, ir.y + 6))
-            mode_lbl = small.render(
-                f"Modo: {'[1] 2D' if self.new_mode == '2d' else '[2] 3D'}"
-                f" raycasting{' (selecione 2 para 3D)' if self.new_mode == '2d' else ''}",
-                True, TEXT)
-            s.blit(mode_lbl, (sw // 2 - mode_lbl.get_width() // 2, 220))
-            btn = pygame.Rect(sw // 2 - 160, sh // 2 + 20, 320, 44)
-            pygame.draw.rect(s, BTN_HOVER if btn.collidepoint(
-                pygame.mouse.get_pos()) else BTN_BG, btn, border_radius=6)
-            t = small.render("Criar e abrir no editor (Enter)", True,
-                             TEXT)
-            s.blit(t, (btn.x + 16, btn.y + 10))
-            hint = tiny.render("ESC = voltar ao menu", True, DIM)
+            pygame.draw.rect(s, BTN_HOVER if self.input_focus else BTN_BG, ir, border_radius=6)
+            pygame.draw.rect(s, ACCENT if self.input_focus else BTN_BORDER, ir, border_radius=6, width=2)
+            
+            f = small.render(self.input_text + ("|" if self.input_focus and (time.time() % 1 > 0.5) else ""), True, TEXT)
+            s.blit(f, (ir.x + 15, ir.y + (ir.height - f.get_height()) // 2))
+            
+            # Seleção de Modo
+            m_y = 260
+            s.blit(small.render("MODO DE RENDERIZAÇÃO:", True, DIM), (sw // 2 - 160, m_y))
+            
+            r2d = pygame.Rect(sw // 2 - 160, m_y + 30, 150, 40)
+            r3d = pygame.Rect(sw // 2 + 10, m_y + 30, 150, 40)
+            
+            for r, mode, lbl_txt, key in [(r2d, "2d", "1. 2D TILEMAP", "1"), (r3d, "3d", "2. 3D RAYCAST", "2")]:
+                is_sel = self.new_mode == mode
+                is_hover = r.collidepoint(pygame.mouse.get_pos())
+                pygame.draw.rect(s, BTN_HOVER if is_hover or is_sel else BTN_BG, r, border_radius=6)
+                pygame.draw.rect(s, ACCENT if is_sel else BTN_BORDER, r, border_radius=6, width=2 if is_sel else 1)
+                txt = small.render(lbl_txt, True, TEXT if is_sel else DIM)
+                s.blit(txt, (r.x + (r.width - txt.get_width()) // 2, r.y + (r.height - txt.get_height()) // 2))
+
+            btn = pygame.Rect(sw // 2 - 160, sh // 2 + 100, 320, 50)
+            is_hover = btn.collidepoint(pygame.mouse.get_pos())
+            pygame.draw.rect(s, SUCCESS if is_hover else BTN_BG, btn, border_radius=8)
+            t = small.render("CRIAR E ABRIR EDITOR", True, BG_DARK if is_hover else SUCCESS)
+            s.blit(t, (btn.x + (btn.width - t.get_width()) // 2, btn.y + (btn.height - t.get_height()) // 2))
+            
+            hint = tiny.render("ESC PARA VOLTAR", True, DIM)
             s.blit(hint, (sw // 2 - hint.get_width() // 2, sh - 40))
         elif self.screen == self.PROFILE_NEW:
-            t = big.render("Novo Perfil", True, ACCENT)
-            s.blit(t, (sw // 2 - t.get_width() // 2, 70))
-            lbl = small.render("Nome do perfil:", True, TEXT)
-            s.blit(lbl, (sw // 2 - lbl.get_width() // 2, 160))
+            t = header_font.render("CRIAR NOVO PERFIL", True, ACCENT)
+            s.blit(t, (sw // 2 - t.get_width() // 2, 80))
+            lbl = small.render("NOME DO PERFIL:", True, DIM)
+            s.blit(lbl, (sw // 2 - 160, 160))
             ir = self._input_rect()
-            pygame.draw.rect(s, BTN_HOVER if self.input_focus else BTN_BG,
-                             ir, border_radius=4)
-            f = small.render(self.input_text + ("_" if self.input_focus
-                                                else ""), True, TEXT)
-            s.blit(f, (ir.x + 12, ir.y + 6))
-            btn = pygame.Rect(sw // 2 - 160, sh // 2 + 20, 320, 44)
-            pygame.draw.rect(s, BTN_HOVER if btn.collidepoint(
-                pygame.mouse.get_pos()) else BTN_BG, btn, border_radius=6)
-            t = small.render("Criar perfil (Enter)", True, TEXT)
-            s.blit(t, (btn.x + 16, btn.y + 10))
-            hint = small.render("Ou pressione N de volta na tela Perfis "
-                                "para cancelar", True, DIM)
+            pygame.draw.rect(s, BTN_HOVER if self.input_focus else BTN_BG, ir, border_radius=6)
+            pygame.draw.rect(s, ACCENT if self.input_focus else BTN_BORDER, ir, border_radius=6, width=2)
+            f = small.render(self.input_text + ("|" if self.input_focus and (time.time() % 1 > 0.5) else ""), True, TEXT)
+            s.blit(f, (ir.x + 15, ir.y + (ir.height - f.get_height()) // 2))
+            
+            btn = pygame.Rect(sw // 2 - 160, sh // 2 + 40, 320, 50)
+            is_hover = btn.collidepoint(pygame.mouse.get_pos())
+            pygame.draw.rect(s, SUCCESS if is_hover else BTN_BG, btn, border_radius=8)
+            t = small.render("CRIAR PERFIL (ENTER)", True, BG_DARK if is_hover else SUCCESS)
+            s.blit(t, (btn.x + (btn.width - t.get_width()) // 2, btn.y + (btn.height - t.get_height()) // 2))
+            
+            hint = tiny.render("ESC PARA CANCELAR", True, DIM)
             s.blit(hint, (sw // 2 - hint.get_width() // 2, sh - 40))
         elif self.screen in (self.PROJECTS, self.PROFILES):
-            title = "Meus Jogos" if self.screen == self.PROJECTS \
-                else "Perfis"
-            t = big.render(title, True, ACCENT)
-            s.blit(t, (sw // 2 - t.get_width() // 2, 60))
-            items = (self._projects() if self.screen == self.PROJECTS
-                     else self._profiles())
+            title = "MEUS PROJETOS" if self.screen == self.PROJECTS else "GERENCIAR PERFIS"
+            t = header_font.render(title, True, ACCENT)
+            s.blit(t, (sw // 2 - t.get_width() // 2, 80))
+            
+            items = (self._projects() if self.screen == self.PROJECTS else self._profiles())
             if not items:
-                none_ = small.render("Nada por aqui ainda — crie um "
-                                     "novo jogo ou perfil!", True, DIM)
-                s.blit(none_, (sw // 2 - none_.get_width() // 2,
-                               sh // 2))
-            y = 150
+                none_ = small.render("NADA POR AQUI AINDA — CRIE UM NOVO!", True, DIM)
+                s.blit(none_, (sw // 2 - none_.get_width() // 2, sh // 2))
+            
+            y = 160
             for i, it in enumerate(items):
-                r = pygame.Rect(sw // 2 - 220, y, 440, 44)
-                if r.collidepoint(pygame.mouse.get_pos()):
-                    pygame.draw.rect(s, BTN_HOVER, r, border_radius=6)
+                r = pygame.Rect(sw // 2 - 220, y, 440, 50)
+                is_hover = r.collidepoint(pygame.mouse.get_pos())
+                is_active = self.screen == self.PROFILES and it["id"] == self.engine.profile_id
+                
+                pygame.draw.rect(s, BTN_HOVER if is_hover else BTN_BG, r, border_radius=8)
+                pygame.draw.rect(s, ACCENT if is_active or is_hover else BTN_BORDER, r, border_radius=8, width=2 if is_active else 1)
+                
                 if self.screen == self.PROFILES:
-                    s.blit(self._avatar(it["name"]), (r.x + 6, r.y + 2))
-                    nm = small.render(
-                        f"[{i + 1}] {it['name']}", True, TEXT)
-                    s.blit(nm, (r.x + 54, r.y + 8))
-                    stats = tiny.render(
-                        f"{len(self.engine.db.list_projects(it['id']))} "
-                        f"jogo(s)", True, DIM)
-                    s.blit(stats, (r.x + 360, r.y + 14))
+                    av = self._avatar(it["name"])
+                    s.blit(av, (r.x + 10, r.y + (r.height - av.get_height()) // 2))
+                    nm = small.render(f"{i + 1}. {it['name'].upper()}", True, ACCENT if is_active else TEXT)
+                    s.blit(nm, (r.x + 60, r.y + (r.height - nm.get_height()) // 2))
+                    
+                    if is_active:
+                        tag = tiny.render("ATIVO", True, BG_DARK)
+                        tag_r = pygame.Rect(r.right - 70, r.y + 15, 60, 20)
+                        pygame.draw.rect(s, ACCENT, tag_r, border_radius=4)
+                        s.blit(tag, (tag_r.x + (tag_r.width - tag.get_width()) // 2, tag_r.y + 3))
                 else:
-                    nm = small.render(
-                        f"[{i + 1}] {it['title']}", True, TEXT)
-                    s.blit(nm, (r.x + 14, r.y + 8))
-                    mode = tiny.render(it.get("mode", "2d"), True,
-                                       ACCENT)
-                    s.blit(mode, (r.x + 380, r.y + 14))
-                y += 50
-            hint = small.render("ESC = voltar", True, DIM)
+                    nm = small.render(f"{i + 1}. {it['title'].upper()}", True, TEXT if not is_hover else ACCENT_LIGHT)
+                    s.blit(nm, (r.x + 20, r.y + (r.height - nm.get_height()) // 2))
+                    mode = tiny.render(it.get("mode", "2D").upper(), True, DIM)
+                    s.blit(mode, (r.right - mode.get_width() - 20, r.y + (r.height - mode.get_height()) // 2))
+                y += 60
+            
+            if self.screen == self.PROFILES:
+                btn = pygame.Rect(sw // 2 - 220, sh - 110, 440, 46)
+                is_hover = btn.collidepoint(pygame.mouse.get_pos())
+                pygame.draw.rect(s, BTN_HOVER if is_hover else BTN_BG, btn, border_radius=8)
+                pygame.draw.rect(s, ACCENT if is_hover else BTN_BORDER, btn, border_radius=8, width=2)
+                t = small.render("+ CRIAR NOVO PERFIL (N)", True, TEXT if not is_hover else ACCENT_LIGHT)
+                s.blit(t, (btn.x + (btn.width - t.get_width()) // 2, btn.y + (btn.height - t.get_height()) // 2))
+                
+            hint = tiny.render("ESC PARA VOLTAR", True, DIM)
             s.blit(hint, (sw // 2 - hint.get_width() // 2, sh - 40))
         elif self.screen == self.DEMOS:
-            t = big.render("Demos", True, ACCENT)
-            s.blit(t, (sw // 2 - t.get_width() // 2, 60))
-            y = 140
+            t = header_font.render("DEMONSTRAÇÕES", True, ACCENT)
+            s.blit(t, (sw // 2 - t.get_width() // 2, 80))
+            y = 160
             for i, (nome, _) in enumerate(self._demo_items()):
-                r = pygame.Rect(sw // 2 - 220, y, 440, 44)
-                if r.collidepoint(pygame.mouse.get_pos()):
-                    pygame.draw.rect(s, BTN_HOVER, r, border_radius=6)
-                nm = small.render(f"[{i + 1}] {nome}", True, TEXT)
-                s.blit(nm, (r.x + 14, r.y + 8))
-                y += 50
-            hint = small.render("ESC = voltar", True, DIM)
+                r = pygame.Rect(sw // 2 - 220, y, 440, 50)
+                is_hover = r.collidepoint(pygame.mouse.get_pos())
+                pygame.draw.rect(s, BTN_HOVER if is_hover else BTN_BG, r, border_radius=8)
+                pygame.draw.rect(s, ACCENT if is_hover else BTN_BORDER, r, border_radius=8, width=1)
+                nm = small.render(f"{i + 1}. {nome.upper()}", True, TEXT if not is_hover else ACCENT_LIGHT)
+                s.blit(nm, (r.x + 20, r.y + (r.height - nm.get_height()) // 2))
+                y += 60
+            hint = tiny.render("ESC PARA VOLTAR", True, DIM)
             s.blit(hint, (sw // 2 - hint.get_width() // 2, sh - 40))
 
-        # toast
+        # toast (notificações)
         if self.message and self.engine.elapsed > self.message_time:
             self.message = ""
         if self.message:
-            f = self._font(24, True)
-            t = f.render(self.message, True, (255, 120, 120))
-            s.blit(t, (sw // 2 - t.get_width() // 2, 20))
+            f = self._font(22, True)
+            t = f.render(self.message.upper(), True, TEXT)
+            tw, th = t.get_width(), t.get_height()
+            tr = pygame.Rect(sw // 2 - tw // 2 - 20, 20, tw + 40, th + 20)
+            pygame.draw.rect(s, BTN_HOVER, tr, border_radius=10)
+            pygame.draw.rect(s, ACCENT, tr, border_radius=10, width=2)
+            s.blit(t, (sw // 2 - tw // 2, 30))
 
     # ------------------------------------------------------------------
     def update(self, dt):

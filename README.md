@@ -38,7 +38,8 @@ pip install lupa   # opcional — só necessário para mods Lua (.lua)
 ## Executando
 
 ```bash
-python -m slicengine                  # menu da engine (com GIF animado)
+python -m slicengine                  # menu inicial profissional (Novo Jogo, Perfis, Projetos)
+python -m slicengine --menu           # menu clássico (com GIF animado)
 python -m slicengine --editor         # editor de tile maps com pincel
 python -m slicengine --run jogo.se    # rodar um pacote .se
 python -m slicengine --ai "pergunta"  # perguntar à IA assistente
@@ -238,6 +239,10 @@ xvfb-run -a python3 tests/test_3d_real_gui.py    # 3D real (GUI)
 xvfb-run -a python3 tests/test_entry_gui.py      # fluxo de entrada: menu/perfis/novo jogo (GUI)
 PYTHONPATH=. python3 tests/test_no_lupa.py         # engine funcionando SEM lupa (import opcional)
 ```
+
+## Branch Principal
+
+Todo o código está unificado no branch **`principal`**. Use este branch para a versão mais estável e completa da engine.
 
 ## Licença
 

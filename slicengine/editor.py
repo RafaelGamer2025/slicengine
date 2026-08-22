@@ -351,6 +351,9 @@ class MapEditor:
 
     def _brush(self, mx, my):
         x, y = self._world_pos(mx, my)
+        # se começou a pintar agora, tira snapshot
+        if self.last_brush is None:
+            self.snapshot()
         r = self.tool_size // 2
         for dx in range(-r, r + 1):
             for dy in range(-r, r + 1):

@@ -181,21 +181,23 @@ from slicengine.editor import MapEditor, TOOL_BRUSH
 eng5 = Engine("Teste5", 320, 240)
 editor = MapEditor(eng5)
 editor.tilemap.set(2, 2, 5)
-editor._snapshot()
-editor.tilemap.set(2, 2, 0)
+editor.snapshot()  # registra o 5 na pilha de undo
+editor.tilemap.set(2, 2, 8)
 editor.undo()
-check("undo restaura tile", editor.tilemap.get(2, 2) == 5)
+check("undo restaura tile", editor.tilemap.get(2, 2) == 5, f"valor: {editor.tilemap.get(2, 2)}")
 editor.redo()
-check("redo reaplica", editor.tilemap.get(2, 2) == 0)
+check("redo reaplica", editor.tilemap.get(2, 2) == 8, f"valor: {editor.tilemap.get(2, 2)}")
 eng5.db.close()
 
 print("== Lua show_text via toast (v0.2) ==")
 from slicengine.lua_api import build_lua_api
+import lupa
 eng6 = Engine("Teste6", 320, 240)
-rt6 = build_lua_api(eng6)
+rt6 = build_lua_api(eng6, lupa)
 rt6.execute('engine.show_text("Olá Lua", 2)')
-check("lua show_text → toast", eng6._toast is not None and
-      eng6._toast[0] == "Olá Lua")
+# O toast em Lua adiciona à fila self.lua_state["texts"]
+check("lua show_text → toast", len(eng6.lua_state["texts"]) > 0 and
+      eng6.lua_state["texts"][0][0] == "Olá Lua", f"texts: {eng6.lua_state['texts']}")
 eng6.db.close()
 
 print("== run_file extensões (v0.2) ==")
