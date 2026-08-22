@@ -45,7 +45,7 @@ class SEFormat:
             "title": title,
             "author": author,
             "mode": mode,
-            "game_version": "0.1.0",
+            "game_version": "0.2.0",
             "scripts": list((scripts or {}).keys()),
         }
         tmpdir = path + ".tmp"

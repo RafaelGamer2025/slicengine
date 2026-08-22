@@ -15,6 +15,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from slicengine import Engine, utils  # noqa: E402
+from slicengine.world import World  # noqa: E402
 
 
 DEMO_MAP_3D = """
@@ -82,16 +83,14 @@ def main():
         engine.run()
 
     elif args[0] == "--run-dir":
-        engine = Engine("SlicEngine", 800, 600,
-                        base_dir=args[1] if len(args) > 1 else ".")
-        # procurar world.json na pasta
+        base_run = args[1] if len(args) > 1 else "."
+        engine = Engine("SlicEngine", 800, 600, base_dir=base_run)
+        # procurar world.json na pasta do projeto
         import json
         wpath = os.path.join(engine.base_dir, "world.json")
         if os.path.exists(wpath):
             with open(wpath) as f:
-                engine.world = Engine.__bases__[0] and \
-                    __import__("slicengine.world", fromlist=["World"]) \
-                    .World.from_json(f.read())
+                engine.world = World.from_json(f.read())
         engine._setup_scene()
         engine.run()
 

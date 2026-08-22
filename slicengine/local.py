@@ -75,7 +75,8 @@ class ScriptRunner:
             src = f.read()
         ext = os.path.splitext(path)[1]
         if lang == "auto":
-            lang = {"lua": "lua", ".py": "python", ".sl": "sl"}.get(ext, "auto")
+            lang = {".lua": "lua", ".py": "python",
+                    ".sl": "sl"}.get(ext, "auto")
         return self.run_string(src, lang)
 
 
